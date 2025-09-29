@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Devices - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Network Devices</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('devices.add_device') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Device
+            </a>
+            <a href="{{ url_for('devices.bulk_import') }}" class="btn btn-sm btn-info">
+                <i class="bi bi-cloud-upload"></i> Bulk Import
+            </a>
+            <button type="button" class="btn btn-sm btn-success" onclick="bulkCollect()">
+                <i class="bi bi-arrow-repeat"></i> Bulk Collect
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                <th>Hostname</th>
+                <th>IP Address</th>
+                <th>Vendor</th>
+                <th>Status</th>
+                <th>Interfaces</th>
+                <th>Last Check</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            <tr>
+                <td><input type="checkbox" class="device-checkbox" value="{{ device.id }}"></td>
+                <td>
+                    <a href="{{ url_for('interfaces.device_interfaces', device_id=device.id) }}">
+                        {{ device.hostname }}
+                    </a>
+                </td>
+                <td>{{ device.ip_address }}</td>
+                <td>{{ device.vendor|replace('_', ' ')|title }}</td>
+                <td>
+                    {% if device.is_reachable %}
+                    <span class="badge bg-success">Reachable</span>
+                    {% else %}
+                    <span class="badge bg-danger" title="{{ device.last_error }}">Unreachable</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge bg-info">{{ device.interfaces.count() }}</span>
+                </td>
+                <td>
+                    {{ device.last_reachability_check.strftime('%Y-%m-%d %H:%M') if device.last_reachability_check else 'Never' }}
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <form method="POST" action="{{ url_for('devices.collect_interfaces', device_id=device.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-outline-primary" title="Collect Interfaces">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </form>
+                        <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-outline-secondary" title="Edit">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('devices.delete_device', device_id=device.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this device?');">
+                            <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function toggleAll(source) {
+    var checkboxes = document.querySelectorAll('.device-checkbox');
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
+
+function bulkCollect() {
+    var selected = [];
+    var checkboxes = document.querySelectorAll('.device-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('Please select at least one device');
+        return;
+    }
+    
+    if (!confirm('Collect interfaces from ' + checkboxes.length + ' device(s)?')) {
+        return;
+    }
+    
+    // Create form and submit
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("devices.bulk_collect") }}';
+    
+    checkboxes.forEach(function(checkbox) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'device_ids[]';
+        input.value = checkbox.value;
+        form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}

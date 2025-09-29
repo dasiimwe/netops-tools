@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit User: {{ user.username }}</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.edit_user', user_id=user.id) }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label">Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="{{ user.username }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ user.email or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="auth_type" class="form-label">Authentication Type</label>
+                            <input type="text" class="form-control" id="auth_type" 
+                                   value="{{ user.auth_type|title }}" readonly>
+                            <div class="form-text">Authentication type cannot be changed after creation</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="created_at" class="form-label">Created</label>
+                            <input type="text" class="form-control" id="created_at" 
+                                   value="{{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else 'Unknown' }}" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" 
+                                       {% if user.is_admin %}checked{% endif %}
+                                       {% if user.id == current_user.id %}disabled{% endif %}>
+                                <label class="form-check-label" for="is_admin">
+                                    Administrator
+                                </label>
+                                {% if user.id == current_user.id %}
+                                <div class="form-text">You cannot change your own admin status</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if user.is_active %}checked{% endif %}
+                                       {% if user.id == current_user.id %}disabled{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Active
+                                </label>
+                                {% if user.id == current_user.id %}
+                                <div class="form-text">You cannot deactivate your own account</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if user.auth_type == 'local' %}
+                    <hr>
+                    <h5>Change Password</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="new_password" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="new_password" name="new_password">
+                            <div class="form-text">
+                                Leave blank to keep current password. Password must be at least 8 characters with uppercase, lowercase, number, and special character.
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="confirm_password" class="form-label">Confirm New Password</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Update User
+                        </button>
+                        <a href="{{ url_for('auth.users') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">User Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">User ID:</dt>
+                    <dd class="col-sm-7">{{ user.id }}</dd>
+                    
+                    <dt class="col-sm-5">Auth Type:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-secondary">{{ user.auth_type|title }}</span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">Status:</dt>
+                    <dd class="col-sm-7">
+                        {% if user.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Role:</dt>
+                    <dd class="col-sm-7">
+                        {% if user.is_admin %}
+                        <span class="badge bg-warning">Admin</span>
+                        {% else %}
+                        <span class="badge bg-primary">User</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Last Login:</dt>
+                    <dd class="col-sm-7">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</dd>
+                </dl>
+            </div>
+        </div>
+        
+        {% if user.id != current_user.id %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0 text-danger">Danger Zone</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <form method="POST" action="{{ url_for('auth.toggle_user_status', user_id=user.id) }}">
+                        <button type="submit" 
+                                class="btn btn-outline-{% if user.is_active %}warning{% else %}success{% endif %} w-100"
+                                onclick="return confirm('Are you sure you want to {% if user.is_active %}deactivate{% else %}activate{% endif %} this user?');">
+                            <i class="bi bi-{% if user.is_active %}pause{% else %}play{% endif %}"></i>
+                            {% if user.is_active %}Deactivate{% else %}Activate{% endif %} User
+                        </button>
+                    </form>
+                    
+                    {% if not (user.is_admin and users|selectattr('is_admin')|list|length <= 1) %}
+                    <form method="POST" action="{{ url_for('auth.delete_user', user_id=user.id) }}" 
+                          onsubmit="return confirm('Are you sure you want to delete user {{ user.username }}? This action cannot be undone.');">
+                        <button type="submit" class="btn btn-outline-danger w-100">
+                            <i class="bi bi-trash"></i> Delete User
+                        </button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-outline-danger w-100" disabled title="Cannot delete the last admin user">
+                        <i class="bi bi-trash"></i> Delete User
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Password confirmation validation
+document.getElementById('new_password').addEventListener('input', validatePassword);
+document.getElementById('confirm_password').addEventListener('input', validatePassword);
+
+function validatePassword() {
+    const password = document.getElementById('new_password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const confirmField = document.getElementById('confirm_password');
+    
+    if (password && confirm && password !== confirm) {
+        confirmField.setCustomValidity('Passwords do not match');
+        confirmField.classList.add('is-invalid');
+    } else {
+        confirmField.setCustomValidity('');
+        confirmField.classList.remove('is-invalid');
+    }
+}
+</script>
+{% endblock %}

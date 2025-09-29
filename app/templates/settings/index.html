@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Application Settings</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Device Connection Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="connection_timeout" class="form-label">Connection Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="connection_timeout" name="connection_timeout" 
+                                   value="{{ settings.connection_timeout }}" min="1" max="300">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="command_timeout" class="form-label">Command Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="command_timeout" name="command_timeout" 
+                                   value="{{ settings.command_timeout }}" min="1" max="300">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="retry_enabled" name="retry_enabled" 
+                                       {% if settings.retry_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="retry_enabled">
+                                    Enable Connection Retry
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="retry_count" class="form-label">Retry Count</label>
+                            <input type="number" class="form-control" id="retry_count" name="retry_count" 
+                                   value="{{ settings.retry_count }}" min="1" max="10">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="retry_delay" class="form-label">Retry Delay (seconds)</label>
+                            <input type="number" class="form-control" id="retry_delay" name="retry_delay" 
+                                   value="{{ settings.retry_delay }}" min="1" max="60">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="max_concurrent" class="form-label">Max Concurrent Connections</label>
+                        <input type="number" class="form-control" id="max_concurrent" name="max_concurrent" 
+                               value="{{ settings.max_concurrent }}" min="1" max="50">
+                        <div class="form-text">Maximum number of simultaneous device connections for bulk operations</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Update Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">TACACS+ Authentication</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tacacs_enabled" name="tacacs_enabled" 
+                                   {% if settings.tacacs_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="tacacs_enabled">
+                                Enable TACACS+ Authentication
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="bi bi-check-circle"></i> Update TACACS+
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info" onclick="testTacacs()">
+                        <i class="bi bi-wifi"></i> Test Connection
+                    </button>
+                </form>
+                
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <strong>Note:</strong> TACACS+ server configuration is set via environment variables.
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quick Links</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('settings.audit_logs') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-journal-text"></i> View Audit Logs
+                    </a>
+                    <a href="{{ url_for('auth.users') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-people"></i> Manage Users
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function testTacacs() {
+    fetch('{{ url_for("settings.test_tacacs") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('TACACS+ connection successful!');
+        } else {
+            alert('TACACS+ connection failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error testing TACACS+ connection');
+    });
+}
+</script>
+{% endblock %}

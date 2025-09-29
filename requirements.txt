@@ -1,0 +1,13 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-Migrate==4.0.7
+netmiko==4.4.0
+cryptography==42.0.8
+bcrypt==4.2.0
+tacacs-plus==2.6
+python-dotenv==1.0.1
+gunicorn==22.0.0
+requests==2.32.3
+pytest==8.3.2
+pytest-cov==5.0.0

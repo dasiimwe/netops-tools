@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block title %}Session {{ session_id[:8] }} - Session Logs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+
+    .log-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+
+    .log-entry {
+        position: relative;
+        margin-bottom: 20px;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+    }
+
+    .log-entry::before {
+        content: '';
+        position: absolute;
+        left: -22px;
+        top: 20px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+    .event-connection_start::before { background: #17a2b8; }
+    .event-connection_success::before { background: #28a745; }
+    .event-connection_failed::before { background: #dc3545; }
+    .event-command_sent::before { background: #6f42c1; }
+    .event-command_response::before { background: #20c997; }
+    .event-command_failed::before { background: #dc3545; }
+    .event-interface_collection_start::before { background: #007bff; }
+    .event-interface_collection_success::before { background: #28a745; }
+    .event-interface_collection_failed::before { background: #dc3545; }
+    .event-disconnection::before { background: #6c757d; }
+    .event-interface_commands_planned::before { background: #fd7e14; }
+
+    .log-timestamp {
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+
+    .log-event-type {
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .log-content {
+        margin-top: 10px;
+    }
+
+    .command-block, .response-block, .error-block {
+        background: #f8f9fa;
+        border-left: 4px solid #007bff;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 0 4px 4px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+
+    .response-block {
+        border-left-color: #28a745;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .error-block {
+        border-left-color: #dc3545;
+        background: #f8d7da;
+    }
+
+    .duration-badge {
+        background: #e9ecef;
+        color: #495057;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-family: 'Courier New', monospace;
+    }
+
+    .session-summary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+
+    .summary-stat {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .summary-stat h3 {
+        margin: 0;
+        font-size: 1.5em;
+    }
+
+    .summary-stat p {
+        margin: 0;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-journal-code"></i> Session Details
+        <code class="text-muted">{{ session_id[:16] }}...</code>
+    </h1>
+    <div class="btn-group">
+        <a href="{{ url_for('session_logs.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Logs
+        </a>
+        <button type="button" class="btn btn-outline-primary" onclick="exportSession()">
+            <i class="bi bi-download"></i> Export
+        </button>
+    </div>
+</div>
+
+<!-- Session Summary -->
+<div class="session-summary">
+    <div class="row">
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3><i class="bi bi-router"></i></h3>
+                <p><strong>{{ device.hostname if device else 'Unknown Device' }}</strong></p>
+                <p>{{ device.ip_address if device else 'N/A' }}</p>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3><i class="bi bi-person"></i></h3>
+                <p><strong>{{ user.username if user else 'Unknown User' }}</strong></p>
+                <p>{{ user.email if user and user.email else 'N/A' }}</p>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3>{{ logs|length }}</h3>
+                <p>Total Events</p>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3>{{ "%.1f"|format(session_duration/1000) }}s</h3>
+                <p>Duration</p>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3>{{ summary.get('connection_failed', {}).get('count', 0) + summary.get('command_failed', {}).get('count', 0) + summary.get('interface_collection_failed', {}).get('count', 0) }}</h3>
+                <p>Errors</p>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="summary-stat">
+                <h3>{{ logs[0].timestamp.strftime('%H:%M:%S') }}</h3>
+                <p>Started At</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Summary -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Event Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for event_type, stats in summary.items() %}
+            <div class="col-md-3 mb-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">{{ event_type.replace('_', ' ').title() }}</h6>
+                        <h4 class="text-primary">{{ stats.count }}</h4>
+                        {% if stats.total_duration > 0 %}
+                        <small class="text-muted">Avg: {{ "%.1f"|format(stats.total_duration / stats.count) }}ms</small>
+                        {% endif %}
+                        {% if stats.errors > 0 %}
+                        <div><span class="badge bg-danger">{{ stats.errors }} errors</span></div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Timeline -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Session Timeline</h5>
+    </div>
+    <div class="card-body">
+        <div class="log-timeline">
+            {% for log in logs %}
+            <div class="log-entry event-{{ log.event_type }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="log-timestamp">{{ log.timestamp.strftime('%H:%M:%S.%f')[:-3] }}</span>
+                        <span class="log-event-type event-{{ log.event_type }}">
+                            {{ log.event_type.replace('_', ' ').title() }}
+                        </span>
+                    </div>
+                    <div>
+                        {% if log.duration_ms %}
+                        <span class="duration-badge">{{ log.duration_ms }}ms</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="log-content">
+                    {% if log.command %}
+                    <div class="command-block">
+                        <strong><i class="bi bi-terminal"></i> Command:</strong><br>
+                        <code>{{ log.command }}</code>
+                    </div>
+                    {% endif %}
+
+                    {% if log.response %}
+                    <div class="response-block">
+                        <strong><i class="bi bi-arrow-return-left"></i> Response:</strong>
+                        <button class="btn btn-sm btn-outline-secondary float-end" onclick="toggleResponse(this)">
+                            <i class="bi bi-eye"></i> Toggle
+                        </button>
+                        <pre class="response-content" style="display: none;"><code>{{ log.response }}</code></pre>
+                        <div class="response-preview">
+                            {% set lines = log.response.split('\n') %}
+                            {{ lines[0][:100] }}{% if log.response|length > 100 %}...{% endif %}
+                            {% if lines|length > 1 %}
+                            <br><small class="text-muted">({{ lines|length - 1 }} more lines - click Toggle to view)</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if log.error_message %}
+                    <div class="error-block">
+                        <strong><i class="bi bi-exclamation-triangle"></i> Error:</strong><br>
+                        {{ log.error_message }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleResponse(button) {
+    const responseBlock = button.closest('.response-block');
+    const responseContent = responseBlock.querySelector('.response-content');
+    const responsePreview = responseBlock.querySelector('.response-preview');
+    const icon = button.querySelector('i');
+
+    if (responseContent.style.display === 'none') {
+        responseContent.style.display = 'block';
+        responsePreview.style.display = 'none';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        responseContent.style.display = 'none';
+        responsePreview.style.display = 'block';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+function exportSession() {
+    const sessionData = {
+        session_id: '{{ session_id }}',
+        device: '{{ device.hostname if device else "Unknown" }}',
+        user: '{{ user.username if user else "Unknown" }}',
+        start_time: '{{ logs[0].timestamp.isoformat() if logs }}',
+        end_time: '{{ logs[-1].timestamp.isoformat() if logs|length > 1 }}',
+        duration_ms: {{ session_duration }},
+        events: [
+            {% for log in logs %}
+            {
+                timestamp: '{{ log.timestamp.isoformat() }}',
+                event_type: '{{ log.event_type }}',
+                command: {{ log.command|tojson if log.command else 'null' }},
+                response: {{ log.response|tojson if log.response else 'null' }},
+                error_message: {{ log.error_message|tojson if log.error_message else 'null' }},
+                duration_ms: {{ log.duration_ms if log.duration_ms else 'null' }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+
+    const blob = new Blob([JSON.stringify(sessionData, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session_${sessionData.session_id.substring(0, 8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Auto-scroll to bottom on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const timeline = document.querySelector('.log-timeline');
+    timeline.scrollTop = timeline.scrollHeight;
+});
+</script>
+{% endblock %}

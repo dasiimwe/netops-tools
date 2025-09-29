@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Logs - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Audit Logs</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshPage()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover table-sm">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Device</th>
+                <th>Details</th>
+                <th>IP Address</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs.items %}
+            <tr>
+                <td>
+                    <small>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                </td>
+                <td>
+                    {% if log.user %}
+                    <span class="badge bg-primary">{{ log.user.username }}</span>
+                    {% else %}
+                    <span class="badge bg-secondary">System</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% set action_class = {
+                        'login': 'success',
+                        'logout': 'info',
+                        'failed_login': 'danger',
+                        'device_added': 'primary',
+                        'device_updated': 'warning',
+                        'device_deleted': 'danger',
+                        'interface_collection': 'info',
+                        'bulk_interface_collection': 'info',
+                        'user_created': 'success',
+                        'user_updated': 'warning',
+                        'user_deleted': 'danger',
+                        'user_status_changed': 'warning',
+                        'settings_updated': 'info'
+                    } %}
+                    <span class="badge bg-{{ action_class.get(log.action, 'secondary') }}">
+                        {{ log.action|replace('_', ' ')|title }}
+                    </span>
+                </td>
+                <td>
+                    {% if log.device %}
+                    <a href="{{ url_for('interfaces.device_interfaces', device_id=log.device.id) }}">
+                        {{ log.device.hostname }}
+                    </a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    <small>{{ log.details }}</small>
+                </td>
+                <td>
+                    <small class="text-muted">{{ log.ip_address or '-' }}</small>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    No audit logs found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if logs.pages > 1 %}
+<nav aria-label="Audit logs pagination">
+    <ul class="pagination justify-content-center">
+        {% if logs.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('settings.audit_logs', page=logs.prev_num) }}">Previous</a>
+        </li>
+        {% endif %}
+        
+        {% for page_num in logs.iter_pages() %}
+            {% if page_num %}
+                {% if page_num != logs.page %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('settings.audit_logs', page=page_num) }}">{{ page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% endif %}
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if logs.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('settings.audit_logs', page=logs.next_num) }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Log Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h5 text-primary">{{ logs.total }}</div>
+                            <div class="small text-muted">Total Entries</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h5 text-info">{{ logs.page }}</div>
+                            <div class="small text-muted">Current Page</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Action Legend</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="small">
+                            <span class="badge bg-success">Login</span><br>
+                            <span class="badge bg-danger">Failed Login</span><br>
+                            <span class="badge bg-primary">Device Added</span><br>
+                            <span class="badge bg-warning">Device Updated</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="small">
+                            <span class="badge bg-info">Interface Collection</span><br>
+                            <span class="badge bg-success">User Created</span><br>
+                            <span class="badge bg-danger">User Deleted</span><br>
+                            <span class="badge bg-info">Settings Updated</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function refreshPage() {
+    window.location.reload();
+}
+</script>
+{% endblock %}

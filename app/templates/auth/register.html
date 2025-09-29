@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Add User - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Add New User</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.register') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label">Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" required autofocus>
+                            <div class="form-text">Username must be unique</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email">
+                            <div class="form-text">Optional - used for notifications</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label">Password *</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="form-text">
+                                Password must be at least 8 characters with uppercase, lowercase, number, and special character.
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="confirm_password" class="form-label">Confirm Password *</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin">
+                            <label class="form-check-label" for="is_admin">
+                                Administrator
+                            </label>
+                            <div class="form-text">Admin users can manage devices, users, and settings</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus"></i> Create User
+                        </button>
+                        <a href="{{ url_for('auth.users') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">User Account Information</h5>
+            </div>
+            <div class="card-body">
+                <p class="small">
+                    <strong>Local Users:</strong>
+                </p>
+                <ul class="small">
+                    <li>Authenticate with username/password</li>
+                    <li>Passwords are securely hashed and stored</li>
+                    <li>Can change password after creation</li>
+                </ul>
+                
+                <p class="small mt-3">
+                    <strong>Administrator Role:</strong>
+                </p>
+                <ul class="small">
+                    <li>Manage network devices</li>
+                    <li>Add/edit/delete users</li>
+                    <li>Configure application settings</li>
+                    <li>View audit logs</li>
+                </ul>
+                
+                <p class="small mt-3">
+                    <strong>Regular User Role:</strong>
+                </p>
+                <ul class="small">
+                    <li>View devices and interfaces</li>
+                    <li>Collect interface data</li>
+                    <li>Export interface information</li>
+                    <li>Manage own profile</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Password Requirements</h5>
+            </div>
+            <div class="card-body">
+                <div id="password-requirements">
+                    <div class="requirement" id="req-length">
+                        <i class="bi bi-x-circle text-danger"></i> At least 8 characters
+                    </div>
+                    <div class="requirement" id="req-upper">
+                        <i class="bi bi-x-circle text-danger"></i> One uppercase letter
+                    </div>
+                    <div class="requirement" id="req-lower">
+                        <i class="bi bi-x-circle text-danger"></i> One lowercase letter
+                    </div>
+                    <div class="requirement" id="req-number">
+                        <i class="bi bi-x-circle text-danger"></i> One number
+                    </div>
+                    <div class="requirement" id="req-special">
+                        <i class="bi bi-x-circle text-danger"></i> One special character
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Password validation
+document.getElementById('password').addEventListener('input', function() {
+    const password = this.value;
+    
+    // Check length
+    updateRequirement('req-length', password.length >= 8);
+    
+    // Check uppercase
+    updateRequirement('req-upper', /[A-Z]/.test(password));
+    
+    // Check lowercase
+    updateRequirement('req-lower', /[a-z]/.test(password));
+    
+    // Check number
+    updateRequirement('req-number', /\d/.test(password));
+    
+    // Check special character
+    updateRequirement('req-special', /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password));
+    
+    validatePasswordMatch();
+});
+
+// Password confirmation validation
+document.getElementById('confirm_password').addEventListener('input', validatePasswordMatch);
+
+function updateRequirement(id, isValid) {
+    const element = document.getElementById(id);
+    const icon = element.querySelector('i');
+    
+    if (isValid) {
+        icon.className = 'bi bi-check-circle text-success';
+    } else {
+        icon.className = 'bi bi-x-circle text-danger';
+    }
+}
+
+function validatePasswordMatch() {
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const confirmField = document.getElementById('confirm_password');
+    
+    if (password && confirm && password !== confirm) {
+        confirmField.setCustomValidity('Passwords do not match');
+        confirmField.classList.add('is-invalid');
+    } else {
+        confirmField.setCustomValidity('');
+        confirmField.classList.remove('is-invalid');
+    }
+}
+</script>
+
+<style>
+.requirement {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+</style>
+{% endblock %}

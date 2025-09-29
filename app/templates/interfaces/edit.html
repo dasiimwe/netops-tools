@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Interface - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit Interface</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('interfaces.device_interfaces', device_id=interface.device_id) }}" class="btn btn-sm btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Device
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Interface Details - {{ interface.device.hostname }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('interfaces.edit_interface', interface_id=interface.id) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Device</label>
+                        <input type="text" class="form-control" value="{{ interface.device.hostname }} ({{ interface.device.ip_address }})" disabled>
+                        <small class="form-text text-muted">Device cannot be changed. Delete and recreate the interface if needed.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Interface Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ interface.name }}" required>
+                        <small class="form-text text-muted">Enter the interface name as it appears on the device</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" class="form-control" id="description" name="description"
+                               value="{{ interface.description or '' }}"
+                               placeholder="e.g., Connection to Core Switch">
+                        <small class="form-text text-muted">Optional description for this interface</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ipv4_address" class="form-label">IPv4 Address</label>
+                        <input type="text" class="form-control" id="ipv4_address" name="ipv4_address"
+                               value="{{ interface.ipv4_address or '' }}"
+                               placeholder="e.g., 192.168.1.1/24"
+                               pattern="^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$">
+                        <small class="form-text text-muted">IPv4 address with CIDR notation (optional)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ipv6_address" class="form-label">IPv6 Address</label>
+                        <input type="text" class="form-control" id="ipv6_address" name="ipv6_address"
+                               value="{{ interface.ipv6_address or '' }}"
+                               placeholder="e.g., 2001:db8::1/64">
+                        <small class="form-text text-muted">IPv6 address with prefix length (optional)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-control" id="status" name="status">
+                            <option value="unknown" {% if interface.status == 'unknown' %}selected{% endif %}>Unknown</option>
+                            <option value="up" {% if interface.status == 'up' %}selected{% endif %}>Up</option>
+                            <option value="down" {% if interface.status == 'down' %}selected{% endif %}>Down</option>
+                            <option value="up/up" {% if interface.status == 'up/up' %}selected{% endif %}>Up/Up</option>
+                            <option value="up/down" {% if interface.status == 'up/down' %}selected{% endif %}>Up/Down</option>
+                            <option value="down/down" {% if interface.status == 'down/down' %}selected{% endif %}>Down/Down</option>
+                            <option value="administratively down" {% if interface.status == 'administratively down' %}selected{% endif %}>Administratively Down</option>
+                        </select>
+                        <small class="form-text text-muted">Current operational status of the interface</small>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-block">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save Changes
+                        </button>
+                        <a href="{{ url_for('interfaces.device_interfaces', device_id=interface.device_id) }}" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Interface Information</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ interface.created_at.strftime('%Y-%m-%d %H:%M') if interface.created_at else 'Unknown' }}</dd>
+
+                    <dt class="col-sm-5">Last Updated:</dt>
+                    <dd class="col-sm-7">{{ interface.last_updated.strftime('%Y-%m-%d %H:%M') if interface.last_updated else 'Never' }}</dd>
+
+                    <dt class="col-sm-5">Interface ID:</dt>
+                    <dd class="col-sm-7">#{{ interface.id }}</dd>
+
+                    <dt class="col-sm-5">Device Vendor:</dt>
+                    <dd class="col-sm-7">{{ interface.device.vendor|replace('_', ' ')|title }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header bg-warning">
+                <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Important Notes</h6>
+            </div>
+            <div class="card-body">
+                <ul class="small mb-0">
+                    <li>Changes are logged in the audit trail</li>
+                    <li>Manual edits may be overwritten by automatic collection</li>
+                    <li>Consider using device configuration management for permanent changes</li>
+                    <li>Interface names should match device configuration exactly</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-format IPv4 address with CIDR
+document.getElementById('ipv4_address').addEventListener('blur', function() {
+    var value = this.value.trim();
+    if (value && !value.includes('/')) {
+        // If no CIDR notation, assume /32 for host or /24 for network
+        if (value.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+            // Check if it looks like a network address (ends in .0)
+            if (value.endsWith('.0')) {
+                this.value = value + '/24';
+            } else {
+                this.value = value + '/32';
+            }
+        }
+    }
+});
+
+// Track changes for confirmation
+let originalValues = {
+    name: document.getElementById('name').value,
+    description: document.getElementById('description').value,
+    ipv4_address: document.getElementById('ipv4_address').value,
+    ipv6_address: document.getElementById('ipv6_address').value,
+    status: document.getElementById('status').value
+};
+
+document.querySelector('form').addEventListener('submit', function(e) {
+    let hasChanges = false;
+    for (let field in originalValues) {
+        if (document.getElementById(field).value !== originalValues[field]) {
+            hasChanges = true;
+            break;
+        }
+    }
+
+    if (!hasChanges) {
+        e.preventDefault();
+        alert('No changes detected. Please modify at least one field before saving.');
+    }
+});
+</script>
+{% endblock %}

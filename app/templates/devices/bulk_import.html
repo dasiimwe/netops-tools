@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Import Devices - Network Device Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 40px 20px;
+        text-align: center;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .upload-area:hover {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+    }
+
+    .upload-area.dragover {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+        transform: scale(1.02);
+    }
+
+    .file-info {
+        margin-top: 15px;
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+
+    .csv-preview {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin: 15px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+        overflow-x: auto;
+    }
+
+    .error-table {
+        font-size: 0.9em;
+    }
+
+    .success-table {
+        font-size: 0.9em;
+    }
+
+    .vendor-badge {
+        font-size: 0.8em;
+    }
+
+    .import-summary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+
+    .summary-stat {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .summary-stat h3 {
+        margin: 0;
+        font-size: 2em;
+    }
+
+    .summary-stat p {
+        margin: 0;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-cloud-upload"></i> Bulk Import Devices</h1>
+    <div class="btn-group">
+        <a href="{{ url_for('devices.download_template') }}" class="btn btn-outline-primary">
+            <i class="bi bi-download"></i> Download Template
+        </a>
+        <a href="{{ url_for('devices.list_devices') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Devices
+        </a>
+    </div>
+</div>
+
+{% if import_results %}
+<!-- Import Results Summary -->
+<div class="import-summary">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="summary-stat">
+                <h3><i class="bi bi-check-circle"></i></h3>
+                <h3>{{ import_results.success_count }}</h3>
+                <p>Successfully Imported</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stat">
+                <h3><i class="bi bi-exclamation-triangle"></i></h3>
+                <h3>{{ import_results.error_count }}</h3>
+                <p>Failed Imports</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stat">
+                <h3><i class="bi bi-list"></i></h3>
+                <h3>{{ import_results.success_count + import_results.error_count }}</h3>
+                <p>Total Processed</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stat">
+                <h3><i class="bi bi-percent"></i></h3>
+                <h3>{{ "%.1f"|format((import_results.success_count / (import_results.success_count + import_results.error_count) * 100) if (import_results.success_count + import_results.error_count) > 0 else 0) }}%</h3>
+                <p>Success Rate</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Successfully Imported Devices -->
+{% if import_results.imported_devices %}
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-check-circle"></i> Successfully Imported Devices</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm success-table">
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>IP Address</th>
+                        <th>Vendor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in import_results.imported_devices %}
+                    <tr>
+                        <td>{{ device.hostname }}</td>
+                        <td>{{ device.ip_address }}</td>
+                        <td>
+                            <span class="badge bg-primary vendor-badge">{{ device.vendor }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Import Errors -->
+{% if import_results.errors %}
+<div class="card mb-4">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Import Errors</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm error-table">
+                <thead>
+                    <tr>
+                        <th>Row</th>
+                        <th>Hostname</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for error in import_results.errors %}
+                    <tr>
+                        <td>{{ error.row }}</td>
+                        <td>{{ error.hostname }}</td>
+                        <td class="text-danger">{{ error.error }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="text-center">
+    <a href="{{ url_for('devices.bulk_import') }}" class="btn btn-primary">
+        <i class="bi bi-arrow-clockwise"></i> Import Another File
+    </a>
+    <a href="{{ url_for('devices.list_devices') }}" class="btn btn-success">
+        <i class="bi bi-list"></i> View All Devices
+    </a>
+</div>
+
+{% else %}
+<!-- Upload Form -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-arrow-up"></i> Upload CSV File</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('csv_file').click()">
+                        <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                        <h4 class="mt-3">Choose CSV File or Drag & Drop</h4>
+                        <p class="text-muted">Select a CSV file containing device information to import</p>
+                        <input type="file" class="d-none" id="csv_file" name="csv_file" accept=".csv" required>
+                        <div class="file-info" id="fileInfo" style="display: none;"></div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" disabled>
+                            <i class="bi bi-cloud-upload"></i> Import Devices
+                        </button>
+                        <a href="{{ url_for('devices.download_template') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-download"></i> Download Template
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> CSV Format Requirements</h6>
+            </div>
+            <div class="card-body">
+                <h6>Required Fields:</h6>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check text-success"></i> <strong>hostname</strong> - Device hostname</li>
+                    <li><i class="bi bi-check text-success"></i> <strong>ip_address</strong> - Device IP address</li>
+                    <li><i class="bi bi-check text-success"></i> <strong>vendor</strong> - Device vendor</li>
+                </ul>
+
+                <h6 class="mt-3">Supported Vendors:</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    <span class="badge bg-primary">cisco_ios</span>
+                    <span class="badge bg-primary">cisco_nxos</span>
+                    <span class="badge bg-primary">cisco_iosxr</span>
+                    <span class="badge bg-primary">paloalto</span>
+                    <span class="badge bg-primary">fortigate</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-file-text"></i> CSV Template Preview</h6>
+            </div>
+            <div class="card-body">
+                <div class="csv-preview">
+hostname,ip_address,vendor
+fw01.company.com,192.168.1.1,paloalto
+sw01.company.com,192.168.1.10,cisco_ios
+rtr01.company.com,192.168.1.20,cisco_ios
+                </div>
+                <small class="text-muted">Download the template for the complete format with sample data.</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('csv_file');
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    // File input change handler
+    fileInput.addEventListener('change', function(e) {
+        handleFileSelect(e.target.files[0]);
+    });
+
+    // Drag and drop handlers
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
+                fileInput.files = files;
+                handleFileSelect(file);
+            } else {
+                alert('Please select a CSV file');
+            }
+        }
+    });
+
+    function handleFileSelect(file) {
+        if (file) {
+            const fileSize = (file.size / 1024).toFixed(2);
+            fileInfo.innerHTML = `
+                <div class="alert alert-info d-inline-block mb-0">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <strong>${file.name}</strong> (${fileSize} KB)
+                </div>
+            `;
+            fileInfo.style.display = 'block';
+            uploadBtn.disabled = false;
+        }
+    }
+
+    // Form submission handler
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        uploadBtn.disabled = true;
+    });
+});
+
+{% if import_results %}
+// Auto-scroll to results if there are any
+window.scrollTo(0, 0);
+{% endif %}
+</script>
+{% endblock %}

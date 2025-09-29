@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Session Logs - Network Device Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-event {
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+    .log-timestamp {
+        color: #666;
+        font-weight: bold;
+    }
+    .event-connection_start { color: #17a2b8; }
+    .event-connection_success { color: #28a745; }
+    .event-connection_failed { color: #dc3545; }
+    .event-command_sent { color: #6f42c1; }
+    .event-command_response { color: #20c997; }
+    .event-command_failed { color: #dc3545; }
+    .event-interface_collection_start { color: #007bff; }
+    .event-interface_collection_success { color: #28a745; }
+    .event-interface_collection_failed { color: #dc3545; }
+    .event-disconnection { color: #6c757d; }
+
+    .filters-card {
+        margin-bottom: 20px;
+    }
+
+    .session-link {
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+
+    .error-text {
+        color: #dc3545;
+        font-style: italic;
+    }
+
+    .command-text {
+        background-color: #f8f9fa;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+    }
+
+    .response-preview {
+        background-color: #e9ecef;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-journal-code"></i> Session Logs</h1>
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-primary" onclick="loadStats()">
+            <i class="bi bi-graph-up"></i> Statistics
+        </button>
+        {% if current_user.is_admin %}
+        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#cleanupModal">
+            <i class="bi bi-trash"></i> Cleanup
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card filters-card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse">
+                <i class="bi bi-funnel"></i> Filters
+            </button>
+        </h5>
+    </div>
+    <div class="collapse show" id="filtersCollapse">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('session_logs.index') }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="session_id" class="form-label">Session ID</label>
+                        <input type="text" class="form-control" id="session_id" name="session_id"
+                               value="{{ filters.session_id }}" placeholder="Enter session ID...">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="device_id" class="form-label">Device</label>
+                        <select class="form-select" id="device_id" name="device_id">
+                            <option value="">All Devices</option>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}" {% if filters.device_id == device.id %}selected{% endif %}>
+                                {{ device.hostname }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="user_id" class="form-label">User</label>
+                        <select class="form-select" id="user_id" name="user_id">
+                            <option value="">All Users</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}" {% if filters.user_id == user.id %}selected{% endif %}>
+                                {{ user.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="event_type" class="form-label">Event Type</label>
+                        <select class="form-select" id="event_type" name="event_type">
+                            <option value="">All Events</option>
+                            {% for event_type in event_types %}
+                            <option value="{{ event_type }}" {% if filters.event_type == event_type %}selected{% endif %}>
+                                {{ event_type.replace('_', ' ').title() }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="hours_back" class="form-label">Time Period</label>
+                        <select class="form-select" id="hours_back" name="hours_back">
+                            <option value="1" {% if filters.hours_back == 1 %}selected{% endif %}>Last Hour</option>
+                            <option value="6" {% if filters.hours_back == 6 %}selected{% endif %}>Last 6 Hours</option>
+                            <option value="24" {% if filters.hours_back == 24 %}selected{% endif %}>Last 24 Hours</option>
+                            <option value="168" {% if filters.hours_back == 168 %}selected{% endif %}>Last Week</option>
+                            <option value="720" {% if filters.hours_back == 720 %}selected{% endif %}>Last Month</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label for="per_page" class="form-label">Per Page</label>
+                        <select class="form-select" id="per_page" name="per_page">
+                            <option value="25" {% if filters.per_page == 25 %}selected{% endif %}>25</option>
+                            <option value="50" {% if filters.per_page == 50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if filters.per_page == 100 %}selected{% endif %}>100</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label for="search" class="form-label">Search (Command/Response/Error)</label>
+                        <input type="text" class="form-control" id="search" name="search"
+                               value="{{ filters.search }}" placeholder="Search in commands, responses, errors...">
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search"></i> Filter
+                        </button>
+                        <a href="{{ url_for('session_logs.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Panel -->
+<div id="statsPanel" class="card mb-3" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Statistics</h5>
+    </div>
+    <div class="card-body" id="statsContent">
+        <!-- Statistics will be loaded here -->
+    </div>
+</div>
+
+<!-- Session Logs -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list"></i> Session Log Entries
+            <span class="badge bg-secondary">{{ pagination.total }} total</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if logs %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Session</th>
+                        <th>Device</th>
+                        <th>User</th>
+                        <th>Event</th>
+                        <th>Details</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="log-timestamp">{{ log.timestamp.strftime('%m-%d %H:%M:%S.%f')[:-3] }}</td>
+                        <td>
+                            <a href="{{ url_for('session_logs.view_session', session_id=log.session_id) }}"
+                               class="session-link">{{ log.session_id[:8] }}...</a>
+                        </td>
+                        <td>{{ log.device.hostname if log.device else 'Unknown' }}</td>
+                        <td>{{ log.user.username if log.user else 'Unknown' }}</td>
+                        <td>
+                            <span class="badge bg-light text-dark event-{{ log.event_type }}">
+                                {{ log.event_type.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                        <td class="log-event">
+                            {% if log.command %}
+                                <div class="command-text">{{ log.command[:50] }}{% if log.command|length > 50 %}...{% endif %}</div>
+                            {% endif %}
+                            {% if log.response %}
+                                <div class="response-preview" title="{{ log.response[:200] }}">
+                                    {{ log.response.split('\n')[0][:50] }}{% if log.response|length > 50 %}...{% endif %}
+                                </div>
+                            {% endif %}
+                            {% if log.error_message %}
+                                <div class="error-text">{{ log.error_message[:100] }}{% if log.error_message|length > 100 %}...{% endif %}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.duration_ms %}
+                                {{ log.duration_ms }}ms
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if pagination.pages > 1 %}
+        <nav aria-label="Session logs pagination">
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('session_logs.index', page=pagination.prev_num, **filters) }}">Previous</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in pagination.iter_pages() %}
+                    {% if page_num %}
+                        {% if page_num != pagination.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('session_logs.index', page=page_num, **filters) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('session_logs.index', page=pagination.next_num, **filters) }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-journal-x" style="font-size: 3rem; color: #6c757d;"></i>
+            <h4 class="mt-3 text-muted">No session logs found</h4>
+            <p class="text-muted">Try adjusting your filters or time period.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Cleanup Modal -->
+{% if current_user.is_admin %}
+<div class="modal fade" id="cleanupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cleanup Old Session Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('session_logs.cleanup_logs') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="days_to_keep" class="form-label">Days to Keep</label>
+                        <input type="number" class="form-control" id="days_to_keep" name="days_to_keep"
+                               value="30" min="1" max="365" required>
+                        <div class="form-text">Logs older than this many days will be permanently deleted.</div>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This action cannot be undone. Please make sure you have backed up any important logs before proceeding.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Delete Old Logs</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadStats() {
+    const hoursBack = document.getElementById('hours_back').value || 24;
+    const statsPanel = document.getElementById('statsPanel');
+    const statsContent = document.getElementById('statsContent');
+
+    statsContent.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+    statsPanel.style.display = 'block';
+
+    fetch(`{{ url_for('session_logs.api_stats') }}?hours_back=${hoursBack}`)
+        .then(response => response.json())
+        .then(data => {
+            let html = `
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5>${data.total_events}</h5>
+                                <p class="mb-0">Total Events</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5>${data.unique_sessions}</h5>
+                                <p class="mb-0">Sessions</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body">
+                                <h5>${data.error_events}</h5>
+                                <p class="mb-0">Errors</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h5>${data.avg_command_duration_ms}ms</h5>
+                                <p class="mb-0">Avg Command Time</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Events by Type (Last ${data.time_period_hours} hours):</h6>
+                    <div class="row">
+            `;
+
+            data.events_by_type.forEach(event => {
+                html += `
+                    <div class="col-md-4 mb-2">
+                        <span class="badge bg-secondary me-2">${event.count}</span>
+                        ${event.type.replace('_', ' ').charAt(0).toUpperCase() + event.type.replace('_', ' ').slice(1)}
+                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+            statsContent.innerHTML = html;
+        })
+        .catch(error => {
+            statsContent.innerHTML = '<div class="alert alert-danger">Error loading statistics</div>';
+        });
+}
+
+// Auto-refresh every 30 seconds if no filters are active
+{% if not (filters.session_id or filters.device_id or filters.user_id or filters.event_type or filters.search) %}
+setInterval(() => {
+    if (document.getElementById('filtersCollapse').classList.contains('show')) {
+        // Don't auto-refresh if filters panel is open
+        return;
+    }
+    location.reload();
+}, 30000);
+{% endif %}
+</script>
+{% endblock %}
