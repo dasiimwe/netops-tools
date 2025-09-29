@@ -13,7 +13,7 @@ class CiscoIOSXRConnector(BaseConnector):
     
     def get_interface_commands(self) -> List[str]:
         return [
-            'show interfaces description',
+            'show interface description',
             'show ipv4 interface brief',
             'show ipv6 interface brief'
         ]
@@ -22,7 +22,7 @@ class CiscoIOSXRConnector(BaseConnector):
         interfaces = {}
         
         # Parse interface descriptions
-        desc_output = command_outputs.get('show interfaces description', '')
+        desc_output = command_outputs.get('show interface description', '')
         
         for line in desc_output.split('\n'):
             line = line.strip()
@@ -135,7 +135,7 @@ class CiscoIOSXRConnector(BaseConnector):
 
             except Exception as e:
                 logger.warning(f"Failed to get running-config for interface {intf_name}: {e}")
-                # Keep the original description from 'show interfaces description'
+                # Keep the original description from 'show interface description'
                 continue
 
     def _parse_description_from_config(self, config_output: str) -> str:
