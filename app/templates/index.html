@@ -243,7 +243,7 @@
                 id="dnsInput"
                 rows="10"
                 cols="50"
-                placeholder="Enter domains or IP addresses, one per line:&#10;example.com&#10;google.com&#10;192.168.1.1&#10;8.8.8.8"
+                placeholder="Enter domains or IP addresses, one per line:&#10;"
                 style="width: 50%; font-family: monospace;"></textarea>
 
             <div style="margin-top: 15px;">
@@ -259,7 +259,7 @@
                     id="dnsServers"
                     rows="3"
                     cols="30"
-                    placeholder="8.8.8.8&#10;1.1.1.1"
+                    placeholder=""
                     style="width: 50%; font-family: monospace; margin-top: 5px;"></textarea>
 
                 <!-- Lookup Type on same line as button -->
@@ -304,13 +304,17 @@
         <p>Parallel Traceroute Tool</p>
 
         <div>
-            <label><strong>Target Hosts (one per line):</strong></label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label><strong>Target Hosts (one per line):</strong></label>
+                <button onclick="saveTracerouteTargets()" style="padding: 4px 8px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
+                <button onclick="loadTracerouteTargets()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+            </div>
             <br>
             <textarea
                 id="tracerouteTargets"
                 rows="10"
                 cols="50"
-                placeholder="Enter IP addresses or hostnames, one per line:&#10;192.168.1.1&#10;google.com&#10;8.8.8.8&#10;github.com"
+                placeholder="Enter IP addresses or hostnames, one per line:&#10;"
                 style="width: 50%; font-family: monospace;"></textarea>
 
             <div style="margin-top: 15px;">
@@ -462,6 +466,37 @@
             </div>
             <div id="savedDnsServerLists">
                 <em>No saved DNS server lists found...</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Traceroute Targets Modal -->
+    <div id="saveTracerouteTargetsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Traceroute Targets</h3>
+                <span class="close" onclick="closeSaveTracerouteTargetsModal()">&times;</span>
+            </div>
+            <div>
+                <label for="tracerouteTargetsListName"><strong>List Name:</strong></label><br>
+                <input type="text" id="tracerouteTargetsListName" placeholder="Enter list name (e.g., Core Networks, Remote Sites)" style="width: 100%; margin: 10px 0; padding: 5px;">
+                <div style="margin-top: 15px;">
+                    <button onclick="confirmSaveTracerouteTargets()" style="padding: 8px 16px; background: #28a745; color: white; border: none; cursor: pointer; margin-right: 10px;">Save</button>
+                    <button onclick="closeSaveTracerouteTargetsModal()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Traceroute Targets Modal -->
+    <div id="loadTracerouteTargetsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Load Traceroute Targets</h3>
+                <span class="close" onclick="closeLoadTracerouteTargetsModal()">&times;</span>
+            </div>
+            <div id="savedTracerouteTargetLists">
+                <em>No saved traceroute target lists found...</em>
             </div>
         </div>
     </div>
@@ -903,9 +938,152 @@
             }
         }
 
+        // Save/Load functionality for traceroute targets
+        function saveTracerouteTargets() {
+            const tracerouteTargets = document.getElementById('tracerouteTargets').value.trim();
+
+            if (!tracerouteTargets) {
+                alert('No traceroute targets to save');
+                return;
+            }
+
+            document.getElementById('saveTracerouteTargetsModal').style.display = 'block';
+            document.getElementById('tracerouteTargetsListName').focus();
+        }
+
+        function closeSaveTracerouteTargetsModal() {
+            document.getElementById('saveTracerouteTargetsModal').style.display = 'none';
+            document.getElementById('tracerouteTargetsListName').value = '';
+        }
+
+        function confirmSaveTracerouteTargets() {
+            const listName = document.getElementById('tracerouteTargetsListName').value.trim();
+            if (!listName) {
+                alert('Please enter a list name');
+                return;
+            }
+
+            const tracerouteTargets = document.getElementById('tracerouteTargets').value.trim();
+            const targetList = tracerouteTargets.split('\n').map(t => t.trim()).filter(t => t.length > 0);
+
+            // Save to localStorage
+            let savedTracerouteTargetLists = JSON.parse(localStorage.getItem('savedTracerouteTargetLists') || '{}');
+            savedTracerouteTargetLists[listName] = {
+                targets: targetList,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('savedTracerouteTargetLists', JSON.stringify(savedTracerouteTargetLists));
+
+            alert(`Traceroute target list "${listName}" saved successfully!`);
+            closeSaveTracerouteTargetsModal();
+        }
+
+        function loadTracerouteTargets() {
+            const savedTracerouteTargetLists = JSON.parse(localStorage.getItem('savedTracerouteTargetLists') || '{}');
+            const savedListsDiv = document.getElementById('savedTracerouteTargetLists');
+
+            if (Object.keys(savedTracerouteTargetLists).length === 0) {
+                savedListsDiv.innerHTML = '<em>No saved traceroute target lists found...</em>';
+            } else {
+                savedListsDiv.innerHTML = '';
+
+                // Add predefined common target lists
+                const commonTargetLists = {
+                    'Public DNS Servers': ['8.8.8.8', '1.1.1.1', '208.67.222.222', '9.9.9.9'],
+                    'Internet Destinations': ['google.com', 'cloudflare.com', 'github.com', 'stackoverflow.com'],
+                    'Network Test Sites': ['test-ipv6.com', 'ipv6-test.com', 'whatismyipaddress.com'],
+                    'RFC3330 Test IPs': ['192.0.2.1', '198.51.100.1', '203.0.113.1']
+                };
+
+                // Add common target lists section
+                const commonHeader = document.createElement('div');
+                commonHeader.innerHTML = '<strong style="color: #007cba;">Common Target Lists:</strong>';
+                commonHeader.style.marginBottom = '10px';
+                savedListsDiv.appendChild(commonHeader);
+
+                for (const [listName, targets] of Object.entries(commonTargetLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+                    savedItem.style.borderColor = '#007cba';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${targets.length} targets</div>
+                    `;
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.onclick = () => confirmLoadTracerouteTargets(listName, targets);
+                    savedListsDiv.appendChild(savedItem);
+                }
+
+                // Add separator
+                const separator = document.createElement('div');
+                separator.innerHTML = '<hr style="margin: 15px 0;"><strong style="color: #28a745;">Saved Lists:</strong>';
+                separator.style.marginBottom = '10px';
+                savedListsDiv.appendChild(separator);
+
+                // Add saved target lists
+                for (const [listName, listData] of Object.entries(savedTracerouteTargetLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${listData.targets.length} targets - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
+                    `;
+
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.className = 'delete-saved';
+                    deleteBtn.innerHTML = '✗';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteTracerouteTargetList(listName);
+                    };
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.appendChild(deleteBtn);
+
+                    savedItem.onclick = () => confirmLoadTracerouteTargets(listName, listData.targets);
+                    savedListsDiv.appendChild(savedItem);
+                }
+            }
+
+            document.getElementById('loadTracerouteTargetsModal').style.display = 'block';
+        }
+
+        function closeLoadTracerouteTargetsModal() {
+            document.getElementById('loadTracerouteTargetsModal').style.display = 'none';
+        }
+
+        function confirmLoadTracerouteTargets(listName, targetList) {
+            const tracerouteTargetsTextarea = document.getElementById('tracerouteTargets');
+            const currentTargets = tracerouteTargetsTextarea.value.trim();
+
+            if (currentTargets) {
+                if (!confirm(`This will replace your current target list. Continue?`)) {
+                    return;
+                }
+            }
+
+            tracerouteTargetsTextarea.value = targetList.join('\n');
+            closeLoadTracerouteTargetsModal();
+            alert(`Traceroute target list "${listName}" loaded successfully!`);
+        }
+
+        function deleteTracerouteTargetList(listName) {
+            if (confirm(`Delete traceroute target list "${listName}"?`)) {
+                let savedTracerouteTargetLists = JSON.parse(localStorage.getItem('savedTracerouteTargetLists') || '{}');
+                delete savedTracerouteTargetLists[listName];
+                localStorage.setItem('savedTracerouteTargetLists', JSON.stringify(savedTracerouteTargetLists));
+                loadTracerouteTargets(); // Refresh the modal
+            }
+        }
+
         // Close modals when clicking outside
         window.onclick = function(event) {
-            const modals = ['saveDeviceModal', 'loadDeviceModal', 'saveCommandModal', 'loadCommandModal', 'saveDnsServerModal', 'loadDnsServerModal'];
+            const modals = ['saveDeviceModal', 'loadDeviceModal', 'saveCommandModal', 'loadCommandModal', 'saveDnsServerModal', 'loadDnsServerModal', 'saveTracerouteTargetsModal', 'loadTracerouteTargetsModal'];
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
                 if (event.target === modal) {
@@ -1189,6 +1367,13 @@
         document.getElementById('dnsServerListName').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 confirmSaveDnsServerList();
+            }
+        });
+
+        // Add Enter key support for traceroute targets save modal
+        document.getElementById('tracerouteTargetsListName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmSaveTracerouteTargets();
             }
         });
 
