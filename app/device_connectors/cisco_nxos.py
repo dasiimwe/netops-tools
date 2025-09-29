@@ -36,12 +36,98 @@ class CiscoNXOSConnector(BaseConnector):
             # Fall back to parent class robust method
             logger.warning(f"NXOS-specific method failed for '{command}' on {self.host}, falling back to base method")
             return super().execute_command(command)
-    
+
+    def connect(self) -> bool:
+        """Connect to NXOS device with specific settings"""
+        if not super().connect():
+            return False
+
+        try:
+            # Set terminal length to 0 for NXOS devices
+            logger.info(f"Setting terminal length 0 for NXOS device {self.host}")
+            self.connection.send_command('terminal length 0', expect_string=r'[\#\>]')
+            logger.info(f"Successfully set terminal length 0 for {self.host}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to set terminal length 0 for {self.host}: {str(e)}")
+            # Continue anyway, as some commands might still work
+            return True
+
+    def get_interfaces(self) -> List[Dict]:
+        """Get interface information from NXOS device with enhanced error handling"""
+        session_start_time = datetime.now()
+        self._log_session_event('interface_collection_start')
+
+        if not self.connection:
+            if not self.connect():
+                self._log_session_event('interface_collection_failed', error_message=f"Failed to connect to {self.host}")
+                raise RuntimeError(f"Failed to connect to {self.host}")
+
+        try:
+            # Ensure terminal length is set
+            try:
+                self.connection.send_command('terminal length 0', expect_string=r'[\#\>]')
+                logger.debug(f"Set terminal length 0 for {self.host}")
+            except Exception as e:
+                logger.warning(f"Could not set terminal length for {self.host}: {str(e)}")
+
+            command_outputs = {}
+            commands = self.get_interface_commands()
+
+            # Log the commands we plan to execute
+            self._log_session_event('interface_commands_planned',
+                                   command=f"Commands to execute: {', '.join(commands)}")
+
+            for command in commands:
+                logger.debug(f"Executing: {command}")
+                try:
+                    output = self.execute_command(command)
+                    command_outputs[command] = output
+                    logger.debug(f"Command '{command}' returned {len(output)} characters")
+                except Exception as e:
+                    logger.error(f"Command '{command}' failed: {str(e)}")
+                    command_outputs[command] = ''
+
+            # Parse the interface data
+            parse_start_time = datetime.now()
+            interfaces = self.parse_interfaces(command_outputs)
+
+            # Filter interfaces with IP addresses
+            interfaces_with_ip = [
+                intf for intf in interfaces
+                if intf.get('ipv4_address') or intf.get('ipv6_address')
+            ]
+
+            # Log the results
+            session_duration_ms = int((datetime.now() - session_start_time).total_seconds() * 1000)
+            result_summary = {
+                'total_interfaces_found': len(interfaces),
+                'interfaces_with_ip': len(interfaces_with_ip),
+                'interface_names': [intf['name'] for intf in interfaces_with_ip]
+            }
+
+            self._log_session_event('interface_collection_success',
+                                   response=f"Found {len(interfaces_with_ip)} interfaces with IP addresses: {', '.join(result_summary['interface_names'])}",
+                                   duration_ms=session_duration_ms)
+
+            logger.info(f"Found {len(interfaces_with_ip)} interfaces with IP addresses on {self.host}")
+            return interfaces_with_ip
+
+        except Exception as e:
+            session_duration_ms = int((datetime.now() - session_start_time).total_seconds() * 1000)
+            self._log_session_event('interface_collection_failed',
+                                   error_message=str(e),
+                                   duration_ms=session_duration_ms)
+            logger.error(f"Error getting interfaces from {self.host}: {str(e)}")
+            raise
+        finally:
+            self.disconnect()
+
     def get_interface_commands(self) -> List[str]:
         return [
             'show interface description',
-            'show ip interface brief vrf all',
-            'show ipv6 interface brief vrf all'
+            'show ip interface brief',
+            'show ipv6 interface brief'
         ]
     
     def parse_interfaces(self, command_outputs: Dict[str, str]) -> List[Dict]:
@@ -71,7 +157,7 @@ class CiscoNXOSConnector(BaseConnector):
                 }
         
         # Parse IPv4 addresses
-        ipv4_output = command_outputs.get('show ip interface brief vrf all', '')
+        ipv4_output = command_outputs.get('show ip interface brief', '')
         ipv4_pattern = r'^(\S+)\s+([\d.]+|unassigned|--)\s+\S+\s+\S+\s+(\S+)\s+(\S+)'
         
         for line in ipv4_output.split('\n'):
@@ -92,7 +178,7 @@ class CiscoNXOSConnector(BaseConnector):
                     interfaces[intf_name]['ipv4_address'] = ip_address
         
         # Parse IPv6 addresses
-        ipv6_output = command_outputs.get('show ipv6 interface brief vrf all', '')
+        ipv6_output = command_outputs.get('show ipv6 interface brief', '')
         current_interface = None
         
         for line in ipv6_output.split('\n'):
