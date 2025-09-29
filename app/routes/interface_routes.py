@@ -1,9 +1,12 @@
-from flask import render_template, request, jsonify, redirect, url_for, flash
+from flask import render_template, request, jsonify, redirect, url_for, flash, make_response
 from flask_login import login_required, current_user
 from app.routes import interface_bp
 from app.models import db, Device, Interface, AuditLog
 from sqlalchemy import or_
 from datetime import datetime
+import csv
+import io
+from werkzeug.utils import secure_filename
 
 @interface_bp.route('/')
 @login_required
@@ -246,3 +249,189 @@ def delete_interface(interface_id):
 
     flash(f'Interface {interface_name} deleted successfully', 'success')
     return redirect(url_for('interfaces.device_interfaces', device_id=device_id))
+
+@interface_bp.route('/csv_template')
+@login_required
+def csv_template():
+    """Download CSV template for bulk interface import"""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header row
+    writer.writerow([
+        'device_hostname',
+        'interface_name',
+        'description',
+        'ipv4_address',
+        'ipv6_address',
+        'status'
+    ])
+
+    # Write example rows
+    writer.writerow([
+        'router1.example.com',
+        'GigabitEthernet1/0/1',
+        'Connection to switch1',
+        '192.168.1.1/24',
+        '',
+        'up/up'
+    ])
+    writer.writerow([
+        'switch1.example.com',
+        'Vlan10',
+        'Management VLAN',
+        '10.0.0.1/24',
+        '2001:db8::1/64',
+        'up/up'
+    ])
+    writer.writerow([
+        'firewall1.example.com',
+        'wan1',
+        'Internet connection',
+        '203.0.113.1/30',
+        '',
+        'up/up'
+    ])
+
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=interfaces_template.csv'
+    response.headers['Content-Type'] = 'text/csv'
+
+    return response
+
+@interface_bp.route('/csv_import', methods=['POST'])
+@login_required
+def csv_import():
+    """Bulk import interfaces from CSV file"""
+    if 'csv_file' not in request.files:
+        flash('No file uploaded', 'danger')
+        return redirect(url_for('interfaces.list_interfaces'))
+
+    file = request.files['csv_file']
+    if file.filename == '':
+        flash('No file selected', 'danger')
+        return redirect(url_for('interfaces.list_interfaces'))
+
+    if not file or not file.filename.lower().endswith('.csv'):
+        flash('Please upload a CSV file', 'danger')
+        return redirect(url_for('interfaces.list_interfaces'))
+
+    update_existing = request.form.get('update_existing') == 'on'
+
+    try:
+        # Read and parse CSV
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_input = csv.DictReader(stream)
+
+        # Validate required columns
+        required_fields = {'device_hostname', 'interface_name'}
+        if not required_fields.issubset(csv_input.fieldnames):
+            missing_fields = required_fields - set(csv_input.fieldnames)
+            flash(f'Missing required columns: {", ".join(missing_fields)}', 'danger')
+            return redirect(url_for('interfaces.list_interfaces'))
+
+        # Track results
+        imported_count = 0
+        updated_count = 0
+        skipped_count = 0
+        error_count = 0
+        errors = []
+
+        for row_num, row in enumerate(csv_input, start=2):  # Start at 2 for header
+            try:
+                # Get required fields
+                device_hostname = row.get('device_hostname', '').strip()
+                interface_name = row.get('interface_name', '').strip()
+
+                if not device_hostname or not interface_name:
+                    error_count += 1
+                    errors.append(f'Row {row_num}: Missing device_hostname or interface_name')
+                    continue
+
+                # Find device
+                device = Device.query.filter_by(hostname=device_hostname).first()
+                if not device:
+                    error_count += 1
+                    errors.append(f'Row {row_num}: Device "{device_hostname}" not found')
+                    continue
+
+                # Check if interface already exists
+                existing_interface = Interface.query.filter_by(
+                    device_id=device.id,
+                    name=interface_name
+                ).first()
+
+                # Get optional fields
+                description = row.get('description', '').strip() or None
+                ipv4_address = row.get('ipv4_address', '').strip() or None
+                ipv6_address = row.get('ipv6_address', '').strip() or None
+                status = row.get('status', '').strip() or 'unknown'
+
+                if existing_interface:
+                    if update_existing:
+                        # Update existing interface
+                        existing_interface.description = description
+                        existing_interface.ipv4_address = ipv4_address
+                        existing_interface.ipv6_address = ipv6_address
+                        existing_interface.status = status
+                        existing_interface.last_updated = datetime.utcnow()
+                        updated_count += 1
+                    else:
+                        skipped_count += 1
+                        continue
+                else:
+                    # Create new interface
+                    interface = Interface(
+                        device_id=device.id,
+                        name=interface_name,
+                        description=description,
+                        ipv4_address=ipv4_address,
+                        ipv6_address=ipv6_address,
+                        status=status,
+                        source='csv_import'
+                    )
+                    db.session.add(interface)
+                    imported_count += 1
+
+            except Exception as e:
+                error_count += 1
+                errors.append(f'Row {row_num}: {str(e)}')
+
+        # Commit changes
+        db.session.commit()
+
+        # Log the action
+        details = f'CSV import: {imported_count} new, {updated_count} updated, {skipped_count} skipped, {error_count} errors'
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            action='csv_import_interfaces',
+            details=details,
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        # Build success message
+        message_parts = []
+        if imported_count > 0:
+            message_parts.append(f'{imported_count} interfaces imported')
+        if updated_count > 0:
+            message_parts.append(f'{updated_count} interfaces updated')
+        if skipped_count > 0:
+            message_parts.append(f'{skipped_count} interfaces skipped')
+
+        if message_parts:
+            flash(' • '.join(message_parts), 'success')
+
+        # Show errors if any
+        if errors:
+            error_msg = f'{error_count} errors occurred:\n' + '\n'.join(errors[:10])  # Show first 10 errors
+            if len(errors) > 10:
+                error_msg += f'\n... and {len(errors) - 10} more errors'
+            flash(error_msg, 'warning')
+
+    except Exception as e:
+        flash(f'Error processing CSV file: {str(e)}', 'danger')
+
+    return redirect(url_for('interfaces.list_interfaces'))

@@ -45,74 +45,20 @@ Access at http://localhost:5000
 
 ## Configuration
 
-### Application Settings
+**Settings (Admin):**
+- Connection timeouts and retry settings
+- TACACS+ authentication (server, port, secret)
 
-Access Settings (admin only) to configure:
-- Connection retry settings
-- Timeout values
-- Maximum concurrent connections
-- TACACS+ authentication (server, port, timeout, shared secret)
+**Supported Vendors:**
+- Cisco IOS/NXOS/IOS-XR
+- Palo Alto Networks
+- FortiGate
 
-### Adding New Vendors
+## Production
 
-To add support for a new vendor:
-
-1. Create connector in `app/device_connectors/vendor_name.py`
-2. Inherit from `BaseConnector` class
-3. Implement required methods:
-   - `get_netmiko_device_type()`
-   - `get_interface_commands()`
-   - `parse_interfaces()`
-4. Register in `app/device_connectors/__init__.py`
-
-## Security Notes
-
-- All device credentials are encrypted before storage
-- Session cookies are HTTP-only and secure (in production)
-- Audit logging tracks all device access
-- Support for external authentication via TACACS+ (configured through web interface)
-- IP translator available publicly (no authentication required)
-- Admin functions require login and proper permissions
-
-## Production Deployment
-
-For production deployment:
-
-1. Set `FLASK_ENV=production` in `.env`
-2. Use a production WSGI server:
 ```bash
+# Production deployment
 gunicorn -w 4 -b 0.0.0.0:5000 run:app
 ```
-3. Configure HTTPS/TLS
-4. Use a production database (PostgreSQL recommended)
-5. Set strong `SECRET_KEY` and `ENCRYPTION_KEY`
 
-## Troubleshooting
-
-### Device Connection Issues
-
-- Verify SSH access to device
-- Check credentials have sufficient privileges
-- Review timeout settings if connections are slow
-- Check audit logs for error details
-
-### Database Issues
-
-- Ensure write permissions for SQLite database
-- For production, migrate to PostgreSQL or MySQL
-
-### TACACS+ Configuration
-
-- TACACS+ settings are now configured through the web interface (Settings page)
-- Environment variables for TACACS+ are deprecated but can still be used for initial setup
-- Use the "Test Connection" button to verify TACACS+ server connectivity
-
-### IP Translator Issues
-
-- If IP addresses are not being translated, verify device interfaces are collected and stored
-- Interface names are automatically shortened (e.g., GigabitEthernet1/0/1 → gi1/0/1)
-- Tooltips require JavaScript to be enabled
-
-## License
-
-This project is for internal use. All rights reserved.
+Set strong `SECRET_KEY` and `ENCRYPTION_KEY` in production environment.
