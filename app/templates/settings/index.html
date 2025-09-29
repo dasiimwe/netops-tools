@@ -77,28 +77,50 @@
                 <form method="POST" action="{{ url_for('settings.update') }}">
                     <div class="mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="tacacs_enabled" name="tacacs_enabled" 
+                            <input class="form-check-input" type="checkbox" id="tacacs_enabled" name="tacacs_enabled"
                                    {% if settings.tacacs_enabled %}checked{% endif %}>
                             <label class="form-check-label" for="tacacs_enabled">
                                 Enable TACACS+ Authentication
                             </label>
                         </div>
                     </div>
-                    
+
+                    <div class="mb-3">
+                        <label for="tacacs_server" class="form-label">TACACS+ Server</label>
+                        <input type="text" class="form-control" id="tacacs_server" name="tacacs_server"
+                               value="{{ settings.tacacs_server or '' }}" placeholder="tacacs.example.com">
+                        <div class="form-text">IP address or hostname of the TACACS+ server</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tacacs_port" class="form-label">Port</label>
+                            <input type="number" class="form-control" id="tacacs_port" name="tacacs_port"
+                                   value="{{ settings.tacacs_port or 49 }}" min="1" max="65535">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="tacacs_timeout" class="form-label">Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="tacacs_timeout" name="tacacs_timeout"
+                                   value="{{ settings.tacacs_timeout or 10 }}" min="1" max="60">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tacacs_secret" class="form-label">Shared Secret</label>
+                        <input type="password" class="form-control" id="tacacs_secret" name="tacacs_secret"
+                               value="{{ settings.tacacs_secret or '' }}" placeholder="Enter shared secret">
+                        <div class="form-text">Shared secret key for TACACS+ authentication</div>
+                    </div>
+
                     <button type="submit" class="btn btn-secondary">
                         <i class="bi bi-check-circle"></i> Update TACACS+
                     </button>
-                    
+
                     <button type="button" class="btn btn-outline-info" onclick="testTacacs()">
                         <i class="bi bi-wifi"></i> Test Connection
                     </button>
                 </form>
-                
-                <div class="mt-3">
-                    <small class="text-muted">
-                        <strong>Note:</strong> TACACS+ server configuration is set via environment variables.
-                    </small>
-                </div>
             </div>
         </div>
         

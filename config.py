@@ -25,11 +25,11 @@ class Config:
     DEVICE_RETRY_COUNT = int(os.environ.get('DEVICE_RETRY_COUNT', 3))
     DEVICE_RETRY_DELAY = int(os.environ.get('DEVICE_RETRY_DELAY', 5))
     
-    # TACACS settings
-    TACACS_SERVER = os.environ.get('TACACS_SERVER', '')
-    TACACS_PORT = int(os.environ.get('TACACS_PORT', 49))
-    TACACS_SECRET = os.environ.get('TACACS_SECRET', '')
-    TACACS_TIMEOUT = int(os.environ.get('TACACS_TIMEOUT', 10))
+    # TACACS settings - DEPRECATED: Now configured via database settings page
+    # TACACS_SERVER = os.environ.get('TACACS_SERVER', '')
+    # TACACS_PORT = int(os.environ.get('TACACS_PORT', 49))
+    # TACACS_SECRET = os.environ.get('TACACS_SECRET', '')
+    # TACACS_TIMEOUT = int(os.environ.get('TACACS_TIMEOUT', 10))
     
     # Encryption key for device credentials
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')

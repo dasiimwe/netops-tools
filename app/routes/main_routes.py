@@ -87,11 +87,18 @@ def translate_ip():
         if interface:
             device = interface.device
 
-            # Create display format with bold blue hostname: ip(<b style="color: blue;">hostname</b>-interface)
-            short_name = f"<b style=\"color: blue;\">{device.hostname}</b>-{interface.name}"
-            if len(device.hostname) > 10:
-                # Shorten hostname if too long
-                short_name = f"<b style=\"color: blue;\">{device.hostname[:10]}...</b>-{interface.name}"
+            # Shorten interface name: first 2 letters + digits at end (e.g., GigabitEthernet1/0/1 -> gi1/0/1)
+            interface_short = interface.name.lower()
+            # Extract first 2 letters and any digits/slashes at the end
+            match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+            if match:
+                interface_short = match.group(1).lower() + match.group(2)
+            else:
+                # Fallback: just take first 2 chars if no match
+                interface_short = interface.name[:2].lower()
+
+            # Create display format with blue hostname: ip(hostname-interface)
+            short_name = f"<span style=\"color: blue;\">{device.hostname}</span>-{interface_short}"
 
             display_text = f"{ip}({short_name})"
 
@@ -109,11 +116,14 @@ def translate_ip():
             # Store replacement for this IP
             import json
             tooltip_json = json.dumps(tooltip_data).replace('"', '&quot;')
-            enhanced_ip = f'<span class="ip-enhanced" data-ip="{ip}" data-tooltip="{tooltip_json}" data-mgmt-ip="{device.ip_address}">{display_text}</span>'
+            enhanced_ip = f'<span class="ip-enhanced" data-ip="{ip}" data-tooltip="{tooltip_json}" data-mgmt-ip="{device.ip_address}" style="cursor: pointer;">{display_text}</span>'
             ip_replacements[ip] = enhanced_ip
 
     # Apply replacements in order of longest IP first to avoid partial matches
     for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
         translated_text = translated_text.replace(ip, ip_replacements[ip])
+
+    # Convert newlines to HTML line breaks to preserve formatting
+    translated_text = translated_text.replace('\n', '<br>')
 
     return jsonify({'translated_text': translated_text})

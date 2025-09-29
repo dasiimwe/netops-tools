@@ -7,7 +7,7 @@ except ImportError:
     TACACSClient = None
     TAC_PLUS_AUTHEN_STATUS_PASS = None
 
-from app.models import db, User
+from app.models import db, User, Settings
 from datetime import datetime
 import logging
 from flask import current_app
@@ -21,11 +21,11 @@ def authenticate_tacacs(username: str, password: str) -> User:
         logger.error("TACACS+ library not available")
         return None
     
-    # Get TACACS configuration
-    tacacs_server = current_app.config.get('TACACS_SERVER')
-    tacacs_port = current_app.config.get('TACACS_PORT', 49)
-    tacacs_secret = current_app.config.get('TACACS_SECRET')
-    tacacs_timeout = current_app.config.get('TACACS_TIMEOUT', 10)
+    # Get TACACS configuration from database settings
+    tacacs_server = Settings.get_value('tacacs_server', '')
+    tacacs_port = Settings.get_value('tacacs_port', 49)
+    tacacs_secret = Settings.get_value('tacacs_secret', '')
+    tacacs_timeout = Settings.get_value('tacacs_timeout', 10)
     
     if not tacacs_server or not tacacs_secret:
         logger.error("TACACS+ server not configured")
@@ -77,10 +77,10 @@ def test_tacacs_connection() -> bool:
     if not TACACS_AVAILABLE:
         return False
         
-    tacacs_server = current_app.config.get('TACACS_SERVER')
-    tacacs_port = current_app.config.get('TACACS_PORT', 49)
-    tacacs_secret = current_app.config.get('TACACS_SECRET')
-    tacacs_timeout = current_app.config.get('TACACS_TIMEOUT', 10)
+    tacacs_server = Settings.get_value('tacacs_server', '')
+    tacacs_port = Settings.get_value('tacacs_port', 49)
+    tacacs_secret = Settings.get_value('tacacs_secret', '')
+    tacacs_timeout = Settings.get_value('tacacs_timeout', 10)
     
     if not tacacs_server or not tacacs_secret:
         return False

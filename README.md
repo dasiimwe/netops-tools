@@ -1,94 +1,47 @@
-# Network Device Interface Manager
+# Netops Toolkit
 
-A Flask-based web application for managing network devices and collecting interface information. Supports multiple vendors including Cisco (IOS, NXOS, IOS-XR), Palo Alto Networks, and FortiGate devices.
+Network device management and IP translation tool supporting Cisco, Palo Alto, and FortiGate devices.
 
-## Features
+## Key Features
 
-- **Multi-vendor Support**: Cisco IOS/NXOS/IOS-XR, Palo Alto, FortiGate
-- **Secure Credential Storage**: Device credentials encrypted in database
-- **Dual Authentication**: Local users and TACACS+ support
-- **Interface Collection**: Automated collection of interface configurations and IP addresses
-- **Bulk Operations**: Collect from multiple devices simultaneously
-- **Web Interface**: User-friendly dashboard for device management
-- **Audit Logging**: Track all user actions and device access
-- **Extensible Architecture**: Easy to add support for new vendors
+- **IP Address Translator**: Translates IP addresses in text to show hostname and interface info (no login required)
+- **Device Management**: Add and manage network devices with encrypted credential storage
+- **Interface Collection**: Automated collection from multiple vendors
+- **TACACS+ Authentication**: Configurable through web interface
 
-## Installation
+## Quick Start
 
-### Prerequisites
-
-- Python 3.8 or higher
-- pip (Python package manager)
-- Virtual environment (recommended)
-
-### Setup Steps
-
-1. Clone the repository:
 ```bash
-cd /Users/dna/git-projects/netops-tools/netops-tools
-```
-
-2. Create and activate virtual environment:
-```bash
+# Setup
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-4. Copy environment configuration:
-```bash
 cp .env.example .env
-```
 
-5. Edit `.env` and configure:
-   - Generate encryption key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-   - Add the key to `ENCRYPTION_KEY` in `.env`
-   - Configure TACACS+ settings if needed
+# Configure encryption key in .env
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-6. Initialize database:
-```bash
+# Initialize and run
 python init_db.py
-```
-
-7. Run the application:
-```bash
 python run.py
 ```
 
-The application will be available at http://localhost:5000
-
-## Default Login
-
-- Username: `admin`
-- Password: `Admin@123`
-
-**Important**: Change the default password after first login!
+Access at http://localhost:5000
 
 ## Usage
 
-### Adding Devices
+**Default Login:** `admin` / `Admin@123` (change after first login)
 
-1. Navigate to Devices → Add Device
-2. Enter device information:
-   - Hostname and IP address
-   - Select vendor and device type
-   - Provide SSH credentials
-   - Optionally assign to a group
+### IP Address Translator
+- Home page (no login required)
+- Paste text with IP addresses
+- Get format: `IP(hostname-interface)` with hover tooltips
+- Example: `192.168.1.1` → `192.168.1.1(router1-gi1/0/1)`
 
-### Collecting Interface Data
-
-- **Single Device**: Click the refresh icon next to a device
-- **Bulk Collection**: Select multiple devices and click "Bulk Collect"
-
-### Viewing Interfaces
-
-- Go to Interfaces to see all collected interface data
-- Filter by device, status, or IP version
-- Export data as JSON for external processing
+### Device Management
+- Add devices: Devices → Add Device
+- Collect interfaces: Click refresh icon or bulk collect
+- View data: Interfaces page with filtering and export
 
 ## Configuration
 
@@ -98,7 +51,7 @@ Access Settings (admin only) to configure:
 - Connection retry settings
 - Timeout values
 - Maximum concurrent connections
-- TACACS+ authentication
+- TACACS+ authentication (server, port, timeout, shared secret)
 
 ### Adding New Vendors
 
@@ -117,7 +70,9 @@ To add support for a new vendor:
 - All device credentials are encrypted before storage
 - Session cookies are HTTP-only and secure (in production)
 - Audit logging tracks all device access
-- Support for external authentication via TACACS+
+- Support for external authentication via TACACS+ (configured through web interface)
+- IP translator available publicly (no authentication required)
+- Admin functions require login and proper permissions
 
 ## Production Deployment
 
@@ -145,6 +100,18 @@ gunicorn -w 4 -b 0.0.0.0:5000 run:app
 
 - Ensure write permissions for SQLite database
 - For production, migrate to PostgreSQL or MySQL
+
+### TACACS+ Configuration
+
+- TACACS+ settings are now configured through the web interface (Settings page)
+- Environment variables for TACACS+ are deprecated but can still be used for initial setup
+- Use the "Test Connection" button to verify TACACS+ server connectivity
+
+### IP Translator Issues
+
+- If IP addresses are not being translated, verify device interfaces are collected and stored
+- Interface names are automatically shortened (e.g., GigabitEthernet1/0/1 → gi1/0/1)
+- Tooltips require JavaScript to be enabled
 
 ## License
 

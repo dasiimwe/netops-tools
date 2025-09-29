@@ -19,7 +19,11 @@ def index():
         'connection_timeout': Settings.get_value('connection_timeout', 30),
         'command_timeout': Settings.get_value('command_timeout', 30),
         'max_concurrent': Settings.get_value('max_concurrent', 10),
-        'tacacs_enabled': Settings.get_value('tacacs_enabled', False)
+        'tacacs_enabled': Settings.get_value('tacacs_enabled', False),
+        'tacacs_server': Settings.get_value('tacacs_server', ''),
+        'tacacs_port': Settings.get_value('tacacs_port', 49),
+        'tacacs_timeout': Settings.get_value('tacacs_timeout', 10),
+        'tacacs_secret': Settings.get_value('tacacs_secret', '')
     }
     
     return render_template('settings/index.html', settings=settings)
@@ -66,7 +70,31 @@ def update():
                       request.form.get('tacacs_enabled') == 'on',
                       'bool',
                       'Enable TACACS+ authentication')
-    
+
+    # Update TACACS+ settings
+    Settings.set_value('tacacs_server',
+                      request.form.get('tacacs_server', '').strip(),
+                      'string',
+                      'TACACS+ server hostname or IP address')
+
+    Settings.set_value('tacacs_port',
+                      int(request.form.get('tacacs_port', 49)),
+                      'int',
+                      'TACACS+ server port')
+
+    Settings.set_value('tacacs_timeout',
+                      int(request.form.get('tacacs_timeout', 10)),
+                      'int',
+                      'TACACS+ connection timeout (seconds)')
+
+    # Store TACACS+ secret securely (encrypt if needed)
+    tacacs_secret = request.form.get('tacacs_secret', '').strip()
+    if tacacs_secret:  # Only update if a value is provided
+        Settings.set_value('tacacs_secret',
+                          tacacs_secret,
+                          'string',
+                          'TACACS+ shared secret key')
+
     # Log settings update
     audit_log = AuditLog(
         user_id=current_user.id,
