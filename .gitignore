@@ -198,3 +198,7 @@ temp/
 *.bak
 *.backup
 *.old
+
+# Markdown files (except README.md)
+*.md
+!README.md

@@ -138,6 +138,7 @@
         <div class="tab active" onclick="showTab('ip-translator')">IP Translator</div>
         <div class="tab" onclick="showTab('command-runner')">Command Run Tool</div>
         <div class="tab" onclick="showTab('dns-lookup')">DNS Lookup</div>
+        <div class="tab" onclick="showTab('traceroute')">Traceroute</div>
     </div>
 
     <!-- IP Translator Tab -->
@@ -259,7 +260,7 @@
                     id="dnsServers"
                     rows="5"
                     cols="30"
-                    placeholder="8.8.8.8&#10;1.1.1.1&#10;208.67.222.222"
+                    placeholder=""
                     style="width: 100%; font-family: monospace;"></textarea>
 
                 <div style="margin-top: 20px;">
@@ -294,6 +295,84 @@
                 <br>
                 <div id="dnsResults" style="border: 1px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.2; background: white; margin-top: 10px; white-space: pre-wrap;">
                     <em>DNS lookup results will appear here...</em>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Traceroute Tab -->
+    <div id="traceroute" class="tab-content">
+        <p>Parallel Traceroute Tool</p>
+
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 2;">
+                <label><strong>Target Hosts (one per line):</strong></label>
+                <br>
+                <textarea
+                    id="tracerouteTargets"
+                    rows="10"
+                    cols="50"
+                    placeholder="Enter IP addresses or hostnames, one per line:&#10;192.168.1.1&#10;google.com&#10;8.8.8.8&#10;github.com"
+                    style="width: 100%; font-family: monospace;"></textarea>
+            </div>
+
+            <div style="flex: 1;">
+                <label><strong>Traceroute Options:</strong></label>
+
+                <div style="margin: 15px 0;">
+                    <label>Max Hops (TTL):</label><br>
+                    <input type="number" id="maxHops" min="1" max="255" value="30" style="width: 100%; padding: 5px;">
+                </div>
+
+                <div style="margin: 15px 0;">
+                    <label>Timeout (seconds):</label><br>
+                    <input type="number" id="traceTimeout" min="1" max="60" value="1" style="width: 100%; padding: 5px;">
+                </div>
+
+                <div style="margin: 15px 0;">
+                    <label>Probes per hop:</label><br>
+                    <input type="number" id="probesPerHop" min="1" max="10" value="1" style="width: 100%; padding: 5px;">
+                </div>
+
+                <div style="margin: 15px 0;">
+                    <label>Packet size (bytes):</label><br>
+                    <input type="number" id="packetSize" min="28" max="65000" value="60" style="width: 100%; padding: 5px;">
+                </div>
+
+                <div style="margin: 15px 0;">
+                    <label>
+                        <input type="checkbox" id="translateIPs" checked>
+                        Translate IP addresses
+                    </label>
+                </div>
+
+                <div style="margin: 15px 0;">
+                    <label>
+                        <input type="checkbox" id="resolveHostnames" checked>
+                        Resolve hostnames
+                    </label>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button onclick="performTraceroute()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; width: 100%;">Run Traceroute</button>
+                    <div id="tracerouteProgress" style="display: none; margin-top: 10px; text-align: center;">
+                        <div id="tracerouteProgressText">Running traceroutes... Please wait.</div>
+                        <div id="tracerouteProgressDetail" style="margin-top: 5px; font-size: 12px; color: #666;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <div style="margin-top: 20px;">
+                <label>
+                    <strong>Traceroute Results:</strong>
+                    <button id="copyTracerouteButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyTracerouteResults()">Copy</button>
+                    <button id="downloadTracerouteButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer; background: #28a745; color: white; border: none;" onclick="downloadTracerouteResults()">Download</button>
+                </label>
+                <br>
+                <div id="tracerouteResults" style="border: 1px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.4; background: white; margin-top: 10px; white-space: pre-wrap; overflow-x: auto;">
+                    <em>Traceroute results will appear here...</em>
                 </div>
             </div>
         </div>
@@ -1123,6 +1202,380 @@
             }
         });
 
+        // Traceroute functionality
+        let tracerouteResultsData = {};
+        let tracerouteEventSource = null;
+        let currentTracerouteData = {};
+
+        async function performTraceroute() {
+            const targetsInput = document.getElementById('tracerouteTargets').value.trim();
+            const maxHops = parseInt(document.getElementById('maxHops').value);
+            const timeout = parseInt(document.getElementById('traceTimeout').value);
+            const probesPerHop = parseInt(document.getElementById('probesPerHop').value);
+            const packetSize = parseInt(document.getElementById('packetSize').value);
+            const translateIPs = document.getElementById('translateIPs').checked;
+            const resolveHostnames = document.getElementById('resolveHostnames').checked;
+
+            const tracerouteResults = document.getElementById('tracerouteResults');
+            const tracerouteProgress = document.getElementById('tracerouteProgress');
+            const tracerouteProgressDetail = document.getElementById('tracerouteProgressDetail');
+
+            if (!targetsInput) {
+                alert('Please enter at least one target host');
+                return;
+            }
+
+            // Parse input - split by lines and filter empty lines
+            const targets = targetsInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+
+            // Close any existing SSE connection
+            if (tracerouteEventSource) {
+                tracerouteEventSource.close();
+            }
+
+            // Reset data
+            currentTracerouteData = {};
+            tracerouteResultsData = {};
+
+            tracerouteProgress.style.display = 'block';
+            tracerouteProgressDetail.textContent = `Starting traceroutes to ${targets.length} targets...`;
+            tracerouteResults.innerHTML = '';
+
+            // Initialize display for each target
+            targets.forEach(target => {
+                currentTracerouteData[target] = { hops: [] };
+            });
+
+            // Build query parameters
+            const params = new URLSearchParams({
+                targets: targets.join(','),
+                max_hops: maxHops,
+                timeout: timeout,
+                probes_per_hop: probesPerHop,
+                packet_size: packetSize,
+                translate_ips: translateIPs,
+                resolve_hostnames: resolveHostnames
+            });
+
+            // Create SSE connection for real-time updates
+            tracerouteEventSource = new EventSource(`/api/traceroute-stream?${params}`);
+
+            tracerouteEventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleTracerouteUpdate(data, translateIPs);
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                }
+            };
+
+            tracerouteEventSource.onerror = function(error) {
+                console.error('SSE error:', error);
+                tracerouteEventSource.close();
+                tracerouteProgress.style.display = 'none';
+            };
+        }
+
+        function handleTracerouteUpdate(data, translateIPs) {
+            const tracerouteResults = document.getElementById('tracerouteResults');
+            const tracerouteProgressDetail = document.getElementById('tracerouteProgressDetail');
+
+            switch(data.type) {
+                case 'init':
+                    tracerouteResults.innerHTML = '<div style="font-weight: bold; margin-bottom: 10px;">TRACEROUTE RESULTS (Real-time)</div>';
+                    break;
+
+                case 'start':
+                    tracerouteProgressDetail.textContent = data.message;
+                    // Create separate div for this target if it doesn't exist
+                    let targetDiv = document.getElementById(`traceroute-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`);
+                    if (!targetDiv) {
+                        targetDiv = document.createElement('div');
+                        targetDiv.id = `traceroute-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        targetDiv.style.cssText = 'margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; font-family: monospace;';
+
+                        const targetHeader = document.createElement('div');
+                        targetHeader.style.cssText = 'font-weight: bold; color: #333; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 5px;';
+                        targetHeader.textContent = `Target: ${data.target}`;
+                        targetDiv.appendChild(targetHeader);
+
+                        const hopsContainer = document.createElement('pre');
+                        hopsContainer.id = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        hopsContainer.style.cssText = 'margin: 0; white-space: pre-wrap; font-family: monospace;';
+                        targetDiv.appendChild(hopsContainer);
+
+                        tracerouteResults.appendChild(targetDiv);
+                    }
+                    break;
+
+                case 'hop':
+                    // Find the target's div and add hop
+                    const targetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const hopsContainer = document.getElementById(targetId);
+
+                    if (hopsContainer) {
+                        const hop = data.hop;
+                        let hopLine = `${hop.hop_num.toString().padStart(2)}  `;
+
+                        if (hop.probes && hop.probes.length > 0) {
+                            hop.probes.forEach(probe => {
+                                if (probe.success) {
+                                    let probeInfo = '';
+
+                                    // Show IP or hostname
+                                    if (probe.hostname && probe.hostname !== probe.ip) {
+                                        probeInfo += `${probe.hostname} (${probe.ip})`;
+                                    } else {
+                                        probeInfo += probe.ip;
+                                    }
+
+                                    // Add translated info if available and enabled
+                                    if (translateIPs && probe.translated_info) {
+                                        probeInfo += ` [${probe.translated_info}]`;
+                                    }
+
+                                    // Add RTT
+                                    probeInfo += `  ${probe.rtt} ms`;
+
+                                    hopLine += probeInfo + '  ';
+                                } else {
+                                    hopLine += '*  ';
+                                }
+                            });
+                        } else {
+                            hopLine += '* * *';
+                        }
+
+                        // Append hop line to target-specific container
+                        hopsContainer.textContent += hopLine + '\n';
+                    }
+
+                    // Store hop data
+                    if (!currentTracerouteData[data.target]) {
+                        currentTracerouteData[data.target] = { hops: [] };
+                    }
+                    currentTracerouteData[data.target].hops.push(hop);
+                    break;
+
+                case 'complete':
+                    tracerouteProgressDetail.textContent = data.message;
+                    // Add completion message to target's div
+                    const completedTargetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const completedHopsContainer = document.getElementById(completedTargetId);
+                    if (completedHopsContainer) {
+                        completedHopsContainer.textContent += '\nTraceroute completed.\n';
+                    }
+                    // Store completed data
+                    tracerouteResultsData[data.target] = currentTracerouteData[data.target];
+                    break;
+
+                case 'error':
+                    // Add error to target's div or general results if no specific target
+                    if (data.target) {
+                        const errorTargetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        const errorHopsContainer = document.getElementById(errorTargetId);
+                        if (errorHopsContainer) {
+                            errorHopsContainer.textContent += `Error: ${data.error}\n`;
+                        }
+                    } else {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.style.cssText = 'color: red; margin-bottom: 10px; padding: 5px; background-color: #ffe6e6; border: 1px solid #ff9999;';
+                        errorDiv.textContent = `Error: ${data.error}`;
+                        tracerouteResults.appendChild(errorDiv);
+                    }
+                    break;
+
+                case 'debug':
+                    console.log(`DEBUG [${data.target}]: Raw line: "${data.raw_line}"`);
+                    break;
+
+                case 'parse_fail':
+                    console.log(`PARSE FAIL [${data.target}]: Could not parse line: "${data.line}"`);
+                    // Display the unparsed line as a fallback in target's div
+                    const parseFailTargetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const parseFailHopsContainer = document.getElementById(parseFailTargetId);
+                    if (parseFailHopsContainer && data.line.match(/^\s*\d+/)) {
+                        parseFailHopsContainer.textContent += `${data.line}\n`;
+                    }
+                    break;
+
+                case 'all_complete':
+                    document.getElementById('tracerouteProgress').style.display = 'none';
+                    tracerouteEventSource.close();
+                    break;
+            }
+
+            // Auto-scroll to bottom
+            const resultsDiv = document.getElementById('tracerouteResults');
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function displayTracerouteResults(results, translateIPs) {
+            const tracerouteResults = document.getElementById('tracerouteResults');
+            let output = [];
+
+            output.push('TRACEROUTE RESULTS');
+            output.push('=' .repeat(80));
+            output.push('');
+
+            for (const [target, targetData] of Object.entries(results)) {
+                output.push(`Target: ${target}`);
+                output.push('-'.repeat(40));
+
+                if (targetData.error) {
+                    output.push(`Error: ${targetData.error}`);
+                    output.push('');
+                    continue;
+                }
+
+                if (targetData.hops && targetData.hops.length > 0) {
+                    targetData.hops.forEach(hop => {
+                        let hopLine = `${hop.hop_num.toString().padStart(2)}  `;
+
+                        if (hop.probes && hop.probes.length > 0) {
+                            hop.probes.forEach(probe => {
+                                if (probe.success) {
+                                    let probeInfo = '';
+
+                                    // Show IP or hostname
+                                    if (probe.hostname && probe.hostname !== probe.ip) {
+                                        probeInfo += `${probe.hostname} (${probe.ip})`;
+                                    } else {
+                                        probeInfo += probe.ip;
+                                    }
+
+                                    // Add translated info if available and enabled
+                                    if (translateIPs && probe.translated_info) {
+                                        probeInfo += ` [${probe.translated_info}]`;
+                                    }
+
+                                    // Add RTT
+                                    probeInfo += `  ${probe.rtt} ms`;
+
+                                    hopLine += probeInfo + '  ';
+                                } else {
+                                    hopLine += '*  ';
+                                }
+                            });
+                        } else {
+                            hopLine += '* * *';
+                        }
+
+                        output.push(hopLine);
+                    });
+                } else {
+                    output.push('No hops found or traceroute failed');
+                }
+
+                output.push('');
+                output.push('');
+            }
+
+            tracerouteResults.textContent = output.join('\n');
+        }
+
+        function copyTracerouteResults() {
+            const tracerouteResults = document.getElementById('tracerouteResults');
+            const textToCopy = tracerouteResults.textContent;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // Visual feedback on the copy button
+                const copyButton = document.getElementById('copyTracerouteButton');
+                const originalText = copyButton.textContent;
+                copyButton.textContent = 'Copied!';
+                copyButton.style.backgroundColor = '#4caf50';
+                copyButton.style.color = 'white';
+
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                    copyButton.style.backgroundColor = '';
+                    copyButton.style.color = '';
+                }, 1000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        function downloadTracerouteResults() {
+            const tracerouteResults = document.getElementById('tracerouteResults').textContent;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `traceroute_results_${timestamp}.txt`;
+
+            const blob = new Blob([tracerouteResults], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        }
+
+        // Toggle IP translation in real-time
+        document.getElementById('translateIPs').addEventListener('change', function() {
+            if (tracerouteResultsData && Object.keys(tracerouteResultsData).length > 0) {
+                // Regenerate display with current data
+                const translateIPs = this.checked;
+                const tracerouteResults = document.getElementById('tracerouteResults');
+                let output = [];
+
+                output.push('TRACEROUTE RESULTS');
+                output.push('='.repeat(80));
+                output.push('');
+
+                for (const [target, targetData] of Object.entries(tracerouteResultsData)) {
+                    output.push(`Target: ${target}`);
+                    output.push('-'.repeat(40));
+
+                    if (targetData.hops && targetData.hops.length > 0) {
+                        targetData.hops.forEach(hop => {
+                            let hopLine = `${hop.hop_num.toString().padStart(2)}  `;
+
+                            if (hop.probes && hop.probes.length > 0) {
+                                hop.probes.forEach(probe => {
+                                    if (probe.success) {
+                                        let probeInfo = '';
+
+                                        // Show IP or hostname
+                                        if (probe.hostname && probe.hostname !== probe.ip) {
+                                            probeInfo += `${probe.hostname} (${probe.ip})`;
+                                        } else {
+                                            probeInfo += probe.ip;
+                                        }
+
+                                        // Add translated info if available and enabled
+                                        if (translateIPs && probe.translated_info) {
+                                            probeInfo += ` [${probe.translated_info}]`;
+                                        }
+
+                                        // Add RTT
+                                        probeInfo += `  ${probe.rtt} ms`;
+
+                                        hopLine += probeInfo + '  ';
+                                    } else {
+                                        hopLine += '*  ';
+                                    }
+                                });
+                            } else {
+                                hopLine += '* * *';
+                            }
+
+                            output.push(hopLine);
+                        });
+                    } else {
+                        output.push('No hops found or traceroute failed');
+                    }
+
+                    output.push('');
+                    output.push('');
+                }
+
+                tracerouteResults.textContent = output.join('\n');
+            }
+        });
+
         // Debounced translation function
         function scheduleTranslation() {
             clearTimeout(timeoutId);
@@ -1251,12 +1704,12 @@
         // Sample text for demonstration
         inputText.addEventListener('focus', function() {
             if (this.value === '') {
-                this.placeholder = 'Try pasting: "Traffic from 192.168.1.1 to 10.0.0.1 shows high latency. Check interface on 172.16.0.1 for errors."';
+                this.placeholder = 'insert command output here..';
             }
         });
 
         inputText.addEventListener('blur', function() {
-            this.placeholder = 'Paste your text here... IP addresses like 192.168.1.1 will be automatically translated to show hostname and interface information.';
+            this.placeholder = 'Paste your text here... IP addresses will be automatically translated to show hostname and interface information.';
         });
     </script>
 </body>

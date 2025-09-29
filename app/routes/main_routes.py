@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, request, jsonify, send_file, current_app
+from flask import render_template, redirect, url_for, request, jsonify, send_file, current_app, Response, stream_with_context
 from flask_login import login_required, current_user
 from app.routes import main_bp
 from app.models import db, Device, Interface, User, AuditLog
@@ -13,6 +13,9 @@ import socket
 import dns.resolver
 import dns.reversename
 import dns.exception
+import subprocess
+import platform
+import time
 
 @main_bp.route('/')
 def index():
@@ -559,6 +562,404 @@ def dns_lookup():
                     target_results['servers'][server_key] = {'error': str(e)}
 
             results[target] = target_results
+
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+def perform_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_size=60, resolve_hostnames=True):
+    """Perform traceroute to a single target"""
+    try:
+        system = platform.system()
+
+        # Build the traceroute command based on OS
+        if system == "Windows":
+            # Windows tracert command
+            cmd = ["tracert", "-h", str(max_hops), "-w", str(timeout * 1000), target]
+        elif system == "Darwin":  # macOS
+            # macOS traceroute command
+            cmd = ["traceroute", "-m", str(max_hops), "-w", str(timeout), "-q", str(probes_per_hop)]
+            if not resolve_hostnames:
+                cmd.append("-n")
+            cmd.append(target)
+        else:  # Linux
+            # Linux traceroute command
+            cmd = ["traceroute", "-m", str(max_hops), "-w", str(timeout), "-q", str(probes_per_hop)]
+            if packet_size != 60:
+                cmd.extend(["-s", str(packet_size)])
+            if not resolve_hostnames:
+                cmd.append("-n")
+            cmd.append(target)
+
+        # Execute traceroute command
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+
+        stdout, stderr = process.communicate(timeout=max_hops * timeout + 10)
+
+        if process.returncode != 0 and stderr:
+            return {'error': f'Traceroute failed: {stderr}'}
+
+        # Parse the traceroute output
+        hops = parse_traceroute_output(stdout, system)
+
+        return {'hops': hops}
+
+    except subprocess.TimeoutExpired:
+        return {'error': 'Traceroute timeout exceeded'}
+    except Exception as e:
+        return {'error': str(e)}
+
+def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_size=60, resolve_hostnames=True, translate_ips=True):
+    """Perform traceroute and yield results hop by hop"""
+    try:
+        system = platform.system()
+
+        # Build the traceroute command based on OS
+        if system == "Windows":
+            cmd = ["tracert", "-h", str(max_hops), "-w", str(timeout * 1000), target]
+        elif system == "Darwin":  # macOS
+            cmd = ["traceroute", "-m", str(max_hops), "-w", str(timeout), "-q", str(probes_per_hop)]
+            if not resolve_hostnames:
+                cmd.append("-n")
+            cmd.append(target)
+        else:  # Linux
+            cmd = ["traceroute", "-m", str(max_hops), "-w", str(timeout), "-q", str(probes_per_hop)]
+            if packet_size != 60:
+                cmd.extend(["-s", str(packet_size)])
+            if not resolve_hostnames:
+                cmd.append("-n")
+            cmd.append(target)
+
+        # Execute traceroute with real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1  # Line buffered
+        )
+
+        # Yield initial message
+        yield json.dumps({
+            'type': 'start',
+            'target': target,
+            'message': f'Starting traceroute to {target}'
+        }) + '\n'
+
+        # Read output line by line
+        for line in iter(process.stdout.readline, ''):
+            if not line:
+                break
+
+            line = line.strip()
+            if not line:
+                continue
+
+            # Debug: yield raw line for debugging
+            yield json.dumps({
+                'type': 'debug',
+                'target': target,
+                'raw_line': line
+            }) + '\n'
+
+            # Skip header lines
+            if 'traceroute to' in line.lower() or 'tracing route' in line.lower():
+                continue
+            if 'over a maximum' in line.lower() or 'hops max' in line.lower():
+                continue
+
+            # Parse hop line
+            hop_data = parse_hop_line(line, system)
+            if hop_data:
+                # Add IP translation if requested
+                if translate_ips:
+                    for probe in hop_data.get('probes', []):
+                        if probe.get('success') and probe.get('ip'):
+                            translated = translate_traceroute_ip(probe['ip'])
+                            if translated:
+                                probe['translated_info'] = translated
+
+                # Yield hop data
+                yield json.dumps({
+                    'type': 'hop',
+                    'target': target,
+                    'hop': hop_data
+                }) + '\n'
+            else:
+                # Debug: yield parse failure info
+                yield json.dumps({
+                    'type': 'parse_fail',
+                    'target': target,
+                    'line': line
+                }) + '\n'
+
+        # Wait for process to complete
+        process.wait()
+
+        # Yield completion message
+        yield json.dumps({
+            'type': 'complete',
+            'target': target,
+            'message': f'Traceroute to {target} completed'
+        }) + '\n'
+
+    except Exception as e:
+        yield json.dumps({
+            'type': 'error',
+            'target': target,
+            'error': str(e)
+        }) + '\n'
+
+def parse_traceroute_output(output, system):
+    """Parse traceroute output based on system type"""
+    hops = []
+    lines = output.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Skip header lines
+        if 'traceroute to' in line.lower() or 'tracing route' in line.lower():
+            continue
+        if 'over a maximum' in line.lower() or 'hops max' in line.lower():
+            continue
+
+        # Parse hop lines
+        hop_data = parse_hop_line(line, system)
+        if hop_data:
+            hops.append(hop_data)
+
+    return hops
+
+def parse_hop_line(line, system):
+    """Parse a single hop line from traceroute output"""
+    import re
+
+    # Try to extract hop number
+    hop_match = re.match(r'^\s*(\d+)', line)
+    if not hop_match:
+        return None
+
+    hop_num = int(hop_match.group(1))
+    hop_data = {'hop_num': hop_num, 'probes': []}
+
+    # Remove hop number from line
+    line = line[hop_match.end():].strip()
+
+    # Pattern for IP addresses
+    ip_pattern = r'(?:\d{1,3}\.){3}\d{1,3}'
+
+    # Pattern for RTT (round trip time)
+    rtt_pattern = r'(\d+\.?\d*)\s*ms'
+
+    # Pattern for hostnames
+    hostname_pattern = r'([a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,})'
+
+    # Find all RTTs in the line
+    rtts = re.findall(rtt_pattern, line)
+
+    # Find IP addresses
+    ips = re.findall(ip_pattern, line)
+
+    # Find hostnames
+    hostnames = re.findall(hostname_pattern, line)
+
+    if ips:
+        # We have at least one response
+        main_ip = ips[0]
+        main_hostname = hostnames[0] if hostnames else None
+
+        # Create probe entries for each RTT
+        for rtt in rtts:
+            probe = {
+                'success': True,
+                'ip': main_ip,
+                'hostname': main_hostname,
+                'rtt': rtt
+            }
+            hop_data['probes'].append(probe)
+    else:
+        # Check for timeouts (usually represented by *)
+        stars = line.count('*')
+        for _ in range(stars):
+            hop_data['probes'].append({'success': False})
+
+    return hop_data if hop_data['probes'] else None
+
+def translate_traceroute_ip(ip_address):
+    """Translate IP to hostname and interface info from database"""
+    try:
+        # Look for interface with this IP
+        interface = Interface.query.join(Device).filter(
+            or_(
+                Interface.ipv4_address.like(f'{ip_address}/%'),
+                Interface.ipv4_address == ip_address
+            )
+        ).first()
+
+        if interface:
+            device = interface.device
+            # Shorten interface name
+            interface_short = interface.name.lower()
+            match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+            if match:
+                interface_short = match.group(1).lower() + match.group(2)
+            else:
+                interface_short = interface.name[:2].lower()
+
+            return f"{device.hostname}-{interface_short}"
+    except Exception:
+        pass
+
+    return None
+
+@main_bp.route('/api/traceroute-stream')
+def traceroute_stream():
+    """SSE endpoint for streaming traceroute results"""
+    targets = request.args.get('targets', '').split(',')
+    max_hops = int(request.args.get('max_hops', 30))
+    timeout = int(request.args.get('timeout', 3))
+    probes_per_hop = int(request.args.get('probes_per_hop', 3))
+    packet_size = int(request.args.get('packet_size', 60))
+    translate_ips = request.args.get('translate_ips', 'true').lower() == 'true'
+    resolve_hostnames = request.args.get('resolve_hostnames', 'true').lower() == 'true'
+
+    def generate():
+        import queue
+        import threading
+
+        # Set SSE headers and send target list
+        valid_targets = [t.strip() for t in targets if t.strip()]
+        yield 'data: ' + json.dumps({'type': 'init', 'message': 'Initializing traceroutes', 'targets': valid_targets}) + '\n\n'
+
+        if not valid_targets:
+            yield 'data: ' + json.dumps({'type': 'all_complete', 'message': 'No valid targets'}) + '\n\n'
+            return
+
+        # Create a shared queue for all traceroute results
+        result_queue = queue.Queue()
+        completed_targets = set()
+
+        def target_worker(target):
+            """Worker function to run traceroute for a single target"""
+            try:
+                for result in perform_streaming_traceroute(
+                    target, max_hops, timeout, probes_per_hop,
+                    packet_size, resolve_hostnames, translate_ips
+                ):
+                    result_queue.put(result)
+                completed_targets.add(target)
+            except Exception as e:
+                error_message = json.dumps({
+                    'type': 'error',
+                    'target': target,
+                    'error': str(e)
+                })
+                result_queue.put(error_message)
+                completed_targets.add(target)
+
+        # Start threads for each target
+        threads = []
+        for target in valid_targets:
+            thread = threading.Thread(target=target_worker, args=(target,))
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
+
+        # Stream results as they come in from all threads
+        while len(completed_targets) < len(valid_targets):
+            try:
+                # Wait for results from any thread
+                result = result_queue.get(timeout=1.0)
+                yield f'data: {result}\n'
+            except queue.Empty:
+                # Check if all threads are still alive
+                alive_threads = [t for t in threads if t.is_alive()]
+                if not alive_threads:
+                    break
+                continue
+
+        # Drain any remaining results
+        try:
+            while True:
+                result = result_queue.get_nowait()
+                yield f'data: {result}\n'
+        except queue.Empty:
+            pass
+
+        yield 'data: ' + json.dumps({'type': 'all_complete', 'message': 'All traceroutes completed'}) + '\n\n'
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
+@main_bp.route('/api/traceroute', methods=['POST'])
+def traceroute():
+    """API endpoint for parallel traceroute operations"""
+    try:
+        data = request.get_json()
+        targets = data.get('targets', [])
+        max_hops = data.get('max_hops', 30)
+        timeout = data.get('timeout', 3)
+        probes_per_hop = data.get('probes_per_hop', 3)
+        packet_size = data.get('packet_size', 60)
+        translate_ips = data.get('translate_ips', True)
+        resolve_hostnames = data.get('resolve_hostnames', True)
+
+        if not targets:
+            return jsonify({
+                'success': False,
+                'error': 'No targets provided'
+            })
+
+        results = {}
+
+        # Use ThreadPoolExecutor for parallel traceroute execution
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_target = {
+                executor.submit(
+                    perform_traceroute,
+                    target, max_hops, timeout, probes_per_hop, packet_size, resolve_hostnames
+                ): target
+                for target in targets
+            }
+
+            for future in future_to_target:
+                target = future_to_target[future]
+                try:
+                    result = future.result(timeout=max_hops * timeout + 30)
+
+                    # Add IP translation if requested
+                    if translate_ips and 'hops' in result:
+                        for hop in result['hops']:
+                            for probe in hop.get('probes', []):
+                                if probe.get('success') and probe.get('ip'):
+                                    translated = translate_traceroute_ip(probe['ip'])
+                                    if translated:
+                                        probe['translated_info'] = translated
+
+                    results[target] = result
+                except Exception as e:
+                    results[target] = {'error': f'Traceroute failed: {str(e)}'}
 
         return jsonify({
             'success': True,
