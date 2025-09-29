@@ -3,49 +3,1125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Netops Toolkit - IP Translator</title>
+    <title>Netops Toolkit</title>
+    <style>
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            background: #f0f0f0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .device-list, .command-list {
+            border: 1px solid #ccc;
+            min-height: 100px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .add-item {
+            margin: 5px 0;
+        }
+        .remove-btn {
+            color: red;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .run-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ddd;
+            margin: 20px 0;
+        }
+        .output-section {
+            margin-top: 20px;
+        }
+        .device-output {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 10px;
+        }
+        .device-output h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .command-output {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 400px;
+            border-radius: 5px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .saved-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .saved-item:hover {
+            background: #e9e9e9;
+        }
+        .saved-item-name {
+            font-weight: bold;
+        }
+        .saved-item-count {
+            color: #666;
+            font-size: 12px;
+        }
+        .delete-saved {
+            color: red;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+    </style>
 </head>
 <body>
-    
-    
-    <p>Network IP Address Translator</p>
+    <h2>Netops Toolkit</h2>
 
-    <label for="inputText">
-        <strong>Enter text with IP addresses:</strong>
-    </label>
-    <br>
-    <textarea
-        id="inputText"
-        rows="6"
-        cols="80"
-        placeholder="Paste your text here... IP addresses like 192.168.1.1 will be automatically translated to show hostname and interface information."></textarea>
-    <div id="loadingIndicator" style="display: none;">
-        Translating...
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('ip-translator')">IP Translator</div>
+        <div class="tab" onclick="showTab('command-runner')">Command Run Tool</div>
+        <div class="tab" onclick="showTab('dns-lookup')">DNS Lookup</div>
     </div>
 
-    <br><br>
+    <!-- IP Translator Tab -->
+    <div id="ip-translator" class="tab-content active">
+        <p>Network IP Address Translator</p>
 
-    <label>
-        <strong>Translated Output:</strong>
-        <button id="copyButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyTranslatedOutput()">Copy</button>
-    </label>
-    <br>
-    <div id="outputArea" style="border: 1px solid #ccc; padding: 10px; min-height: 100px; font-family: 'Consolas', monospace; line-height: 1.2;">
-        <em>Your translated text will appear here...</em>
+        <label for="inputText">
+            <strong>Enter text with IP addresses:</strong>
+        </label>
+        <br>
+        <textarea
+            id="inputText"
+            rows="6"
+            cols="80"
+            placeholder="Paste your text here... IP addresses like 192.168.1.1 will be automatically translated to show hostname and interface information."></textarea>
+        <div id="loadingIndicator" style="display: none;">
+            Translating...
+        </div>
+
+        <br><br>
+
+        <label>
+            <strong>Translated Output:</strong>
+            <button id="copyButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyTranslatedOutput()">Copy</button>
+        </label>
+        <br>
+        <div id="outputArea" style="border: 0px solid #ccc; padding: 10px; min-height: 100px; font-family: 'Consolas', monospace; line-height: 1.2;">
+            <em>Your translated text will appear here...</em>
+        </div>
     </div>
 
-    <br><br>
+    <!-- Command Run Tool Tab -->
+    <div id="command-runner" class="tab-content">
+        <p>Network Device Command Runner</p>
 
-   
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label><strong>Devices:</strong></label>
+                    <div>
+                        <button onclick="saveDeviceList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
+                        <button onclick="loadDeviceList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                    </div>
+                </div>
+                <div class="add-item">
+                    <input type="text" id="deviceInput" placeholder="Enter device IP/hostname" style="width: 200px;">
+                    <button onclick="addDevice()">Add Device</button>
+                </div>
+                <div id="deviceList" class="device-list">
+                    <em>No devices added...</em>
+                </div>
+            </div>
+
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label><strong>Commands:</strong></label>
+                    <div>
+                        <button onclick="saveCommandList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
+                        <button onclick="loadCommandList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                    </div>
+                </div>
+                <div class="add-item">
+                    <input type="text" id="commandInput" placeholder="Enter command" style="width: 200px;">
+                    <button onclick="addCommand()">Add Command</button>
+                </div>
+                <div id="commandList" class="command-list">
+                    <em>No commands added...</em>
+                </div>
+            </div>
+        </div>
+
+        <div class="run-section">
+            <label><strong>Credentials:</strong></label><br>
+            <label>Username: <input type="text" id="username" style="margin: 5px;"></label><br>
+            <label>Password: <input type="password" id="password" style="margin: 5px;"></label><br><br>
+
+            <button onclick="runCommands()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Run Commands</button>
+            <div id="runProgress" style="display: none; margin-top: 10px;">
+                <div>Running commands... Please wait.</div>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <div id="commandResults"></div>
+            <div id="downloadSection" style="display: none; margin-top: 20px;">
+                <button onclick="downloadResults()" style="padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer;">Download All Results (ZIP)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS Lookup Tab -->
+    <div id="dns-lookup" class="tab-content">
+        <p>Bulk DNS Lookup Tool</p>
+
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 2;">
+                <label><strong>Domains/IP Addresses (one per line):</strong></label>
+                <br>
+                <textarea
+                    id="dnsInput"
+                    rows="10"
+                    cols="50"
+                    placeholder="Enter domains or IP addresses, one per line:&#10;example.com&#10;google.com&#10;192.168.1.1&#10;8.8.8.8"
+                    style="width: 100%; font-family: monospace;"></textarea>
+            </div>
+
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label><strong>DNS Servers (optional):</strong></label>
+                    <div>
+                        <button onclick="saveDnsServerList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
+                        <button onclick="loadDnsServerList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                    </div>
+                </div>
+                <div style="margin: 10px 0; font-size: 12px; color: #666;">
+                    Leave empty to use system default DNS servers
+                </div>
+                <textarea
+                    id="dnsServers"
+                    rows="5"
+                    cols="30"
+                    placeholder="8.8.8.8&#10;1.1.1.1&#10;208.67.222.222"
+                    style="width: 100%; font-family: monospace;"></textarea>
+
+                <div style="margin-top: 20px;">
+                    <label><strong>Lookup Type:</strong></label><br>
+                    <select id="lookupType" style="width: 100%; padding: 5px; margin: 5px 0;">
+                        <option value="A">A Record (IPv4)</option>
+                        <option value="AAAA">AAAA Record (IPv6)</option>
+                        <option value="CNAME">CNAME Record</option>
+                        <option value="MX">MX Record</option>
+                        <option value="NS">NS Record</option>
+                        <option value="PTR">PTR Record (Reverse)</option>
+                        <option value="TXT">TXT Record</option>
+                        <option value="ALL">All Records</option>
+                    </select>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button onclick="performDnsLookup()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; width: 100%;">Perform DNS Lookup</button>
+                    <div id="dnsProgress" style="display: none; margin-top: 10px; text-align: center;">
+                        <div>Performing DNS lookups... Please wait.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <div style="margin-top: 20px;">
+                <label>
+                    <strong>DNS Lookup Results:</strong>
+                    <button id="copyDnsButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyDnsResults()">Copy</button>
+                </label>
+                <br>
+                <div id="dnsResults" style="border: 1px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.2; background: white; margin-top: 10px; white-space: pre-wrap;">
+                    <em>DNS lookup results will appear here...</em>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 
     <!-- Tooltip container -->
     <div id="tooltip" style="position: absolute; background: #333; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 1000;"></div>
+
+    <!-- Save Device List Modal -->
+    <div id="saveDeviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Device List</h3>
+                <span class="close" onclick="closeSaveDeviceModal()">&times;</span>
+            </div>
+            <div>
+                <label for="deviceListName"><strong>List Name:</strong></label><br>
+                <input type="text" id="deviceListName" placeholder="Enter list name" style="width: 100%; margin: 10px 0; padding: 5px;">
+                <div style="margin-top: 15px;">
+                    <button onclick="confirmSaveDeviceList()" style="padding: 8px 16px; background: #28a745; color: white; border: none; cursor: pointer; margin-right: 10px;">Save</button>
+                    <button onclick="closeSaveDeviceModal()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Device List Modal -->
+    <div id="loadDeviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Load Device List</h3>
+                <span class="close" onclick="closeLoadDeviceModal()">&times;</span>
+            </div>
+            <div id="savedDeviceLists">
+                <em>No saved device lists found...</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Command List Modal -->
+    <div id="saveCommandModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Command List</h3>
+                <span class="close" onclick="closeSaveCommandModal()">&times;</span>
+            </div>
+            <div>
+                <label for="commandListName"><strong>List Name:</strong></label><br>
+                <input type="text" id="commandListName" placeholder="Enter list name" style="width: 100%; margin: 10px 0; padding: 5px;">
+                <div style="margin-top: 15px;">
+                    <button onclick="confirmSaveCommandList()" style="padding: 8px 16px; background: #28a745; color: white; border: none; cursor: pointer; margin-right: 10px;">Save</button>
+                    <button onclick="closeSaveCommandModal()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Command List Modal -->
+    <div id="loadCommandModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Load Command List</h3>
+                <span class="close" onclick="closeLoadCommandModal()">&times;</span>
+            </div>
+            <div id="savedCommandLists">
+                <em>No saved command lists found...</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save DNS Server List Modal -->
+    <div id="saveDnsServerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save DNS Server List</h3>
+                <span class="close" onclick="closeSaveDnsServerModal()">&times;</span>
+            </div>
+            <div>
+                <label for="dnsServerListName"><strong>List Name:</strong></label><br>
+                <input type="text" id="dnsServerListName" placeholder="Enter list name (e.g., Public DNS, Corporate DNS)" style="width: 100%; margin: 10px 0; padding: 5px;">
+                <div style="margin-top: 15px;">
+                    <button onclick="confirmSaveDnsServerList()" style="padding: 8px 16px; background: #28a745; color: white; border: none; cursor: pointer; margin-right: 10px;">Save</button>
+                    <button onclick="closeSaveDnsServerModal()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load DNS Server List Modal -->
+    <div id="loadDnsServerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Load DNS Server List</h3>
+                <span class="close" onclick="closeLoadDnsServerModal()">&times;</span>
+            </div>
+            <div id="savedDnsServerLists">
+                <em>No saved DNS server lists found...</em>
+            </div>
+        </div>
+    </div>
     <script>
+        // Global variables
         let timeoutId;
         const inputText = document.getElementById('inputText');
         const outputArea = document.getElementById('outputArea');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const tooltip = document.getElementById('tooltip');
+
+        // Command runner variables
+        let devices = [];
+        let commands = [];
+        let commandResults = {};
+
+        // Tab switching function
+        function showTab(tabName) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(tab => tab.classList.remove('active'));
+
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        // Command runner functions
+        function addDevice() {
+            const deviceInput = document.getElementById('deviceInput');
+            const device = deviceInput.value.trim();
+
+            if (device && !devices.includes(device)) {
+                devices.push(device);
+                updateDeviceList();
+                deviceInput.value = '';
+            }
+        }
+
+        function addCommand() {
+            const commandInput = document.getElementById('commandInput');
+            const command = commandInput.value.trim();
+
+            if (command && !commands.includes(command)) {
+                commands.push(command);
+                updateCommandList();
+                commandInput.value = '';
+            }
+        }
+
+        function removeDevice(device) {
+            devices = devices.filter(d => d !== device);
+            updateDeviceList();
+        }
+
+        function removeCommand(command) {
+            commands = commands.filter(c => c !== command);
+            updateCommandList();
+        }
+
+        function updateDeviceList() {
+            const deviceList = document.getElementById('deviceList');
+            if (devices.length === 0) {
+                deviceList.innerHTML = '<em>No devices added...</em>';
+            } else {
+                deviceList.innerHTML = devices.map(device =>
+                    `<div>${device} <span class="remove-btn" onclick="removeDevice('${device}')">✗</span></div>`
+                ).join('');
+            }
+        }
+
+        function updateCommandList() {
+            const commandList = document.getElementById('commandList');
+            if (commands.length === 0) {
+                commandList.innerHTML = '<em>No commands added...</em>';
+            } else {
+                commandList.innerHTML = commands.map(command =>
+                    `<div>${command} <span class="remove-btn" onclick="removeCommand('${command}')">✗</span></div>`
+                ).join('');
+            }
+        }
+
+        async function runCommands() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+
+            if (devices.length === 0) {
+                alert('Please add at least one device');
+                return;
+            }
+
+            if (commands.length === 0) {
+                alert('Please add at least one command');
+                return;
+            }
+
+            const runProgress = document.getElementById('runProgress');
+            const commandResults = document.getElementById('commandResults');
+
+            runProgress.style.display = 'block';
+            commandResults.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/run-commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        devices: devices,
+                        commands: commands,
+                        username: username,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResults(data.results);
+                    document.getElementById('downloadSection').style.display = 'block';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error running commands:', error);
+                alert('Error running commands: ' + error.message);
+            } finally {
+                runProgress.style.display = 'none';
+            }
+        }
+
+        function displayResults(results) {
+            const commandResults = document.getElementById('commandResults');
+            commandResults.innerHTML = '';
+
+            console.log('Displaying results:', results); // Debug log
+
+            for (const [device, deviceData] of Object.entries(results)) {
+                const deviceDiv = document.createElement('div');
+                deviceDiv.className = 'device-output';
+
+                const deviceHeader = document.createElement('h4');
+                deviceHeader.textContent = `${device} (${deviceData.status})`;
+                deviceDiv.appendChild(deviceHeader);
+
+                if (deviceData.status === 'success') {
+                    for (const [command, commandData] of Object.entries(deviceData.commands)) {
+                        const commandDiv = document.createElement('div');
+                        commandDiv.innerHTML = `<strong>Command:</strong> ${command}`;
+                        deviceDiv.appendChild(commandDiv);
+
+                        const outputDiv = document.createElement('div');
+                        outputDiv.className = 'command-output';
+
+                        // Debug logging
+                        console.log(`Command: ${command}`);
+                        console.log(`CommandData:`, commandData);
+                        console.log(`Raw output length: ${commandData.output ? commandData.output.length : 0}`);
+                        console.log(`Translated output length: ${commandData.translated_output ? commandData.translated_output.length : 0}`);
+
+                        let outputText = 'No output received';
+                        if (commandData.translated_output && commandData.translated_output.trim()) {
+                            outputText = commandData.translated_output;
+                        } else if (commandData.output && commandData.output.trim()) {
+                            outputText = commandData.output;
+                        }
+
+                        // Use innerHTML instead of textContent to preserve formatting
+                        outputDiv.innerHTML = outputText.replace(/\n/g, '<br>');
+                        deviceDiv.appendChild(outputDiv);
+                    }
+                } else {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'command-output';
+                    errorDiv.style.color = 'red';
+                    errorDiv.textContent = deviceData.error;
+                    deviceDiv.appendChild(errorDiv);
+                }
+
+                commandResults.appendChild(deviceDiv);
+            }
+
+            // Store results for download
+            window.lastResults = results;
+        }
+
+        async function downloadResults() {
+            if (!window.lastResults) {
+                alert('No results to download');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/download-results', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        results: window.lastResults
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `command_results_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                } else {
+                    alert('Error downloading results');
+                }
+            } catch (error) {
+                console.error('Error downloading results:', error);
+                alert('Error downloading results: ' + error.message);
+            }
+        }
+
+        // Add event listeners for Enter key
+        document.getElementById('deviceInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addDevice();
+            }
+        });
+
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addCommand();
+            }
+        });
+
+        // Save/Load functionality for device lists
+        function saveDeviceList() {
+            if (devices.length === 0) {
+                alert('No devices to save');
+                return;
+            }
+            document.getElementById('saveDeviceModal').style.display = 'block';
+            document.getElementById('deviceListName').focus();
+        }
+
+        function closeSaveDeviceModal() {
+            document.getElementById('saveDeviceModal').style.display = 'none';
+            document.getElementById('deviceListName').value = '';
+        }
+
+        function confirmSaveDeviceList() {
+            const listName = document.getElementById('deviceListName').value.trim();
+            if (!listName) {
+                alert('Please enter a list name');
+                return;
+            }
+
+            // Save to localStorage
+            let savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
+            savedDeviceLists[listName] = {
+                devices: [...devices],
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('savedDeviceLists', JSON.stringify(savedDeviceLists));
+
+            alert(`Device list "${listName}" saved successfully!`);
+            closeSaveDeviceModal();
+        }
+
+        function loadDeviceList() {
+            const savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
+            const savedListsDiv = document.getElementById('savedDeviceLists');
+
+            if (Object.keys(savedDeviceLists).length === 0) {
+                savedListsDiv.innerHTML = '<em>No saved device lists found...</em>';
+            } else {
+                savedListsDiv.innerHTML = '';
+                for (const [listName, listData] of Object.entries(savedDeviceLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${listData.devices.length} devices - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
+                    `;
+
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.className = 'delete-saved';
+                    deleteBtn.innerHTML = '✗';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteDeviceList(listName);
+                    };
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.appendChild(deleteBtn);
+
+                    savedItem.onclick = () => confirmLoadDeviceList(listName, listData.devices);
+                    savedListsDiv.appendChild(savedItem);
+                }
+            }
+
+            document.getElementById('loadDeviceModal').style.display = 'block';
+        }
+
+        function closeLoadDeviceModal() {
+            document.getElementById('loadDeviceModal').style.display = 'none';
+        }
+
+        function confirmLoadDeviceList(listName, deviceList) {
+            if (devices.length > 0) {
+                if (!confirm(`This will replace your current device list (${devices.length} devices). Continue?`)) {
+                    return;
+                }
+            }
+
+            devices = [...deviceList];
+            updateDeviceList();
+            closeLoadDeviceModal();
+            alert(`Device list "${listName}" loaded successfully!`);
+        }
+
+        function deleteDeviceList(listName) {
+            if (confirm(`Delete device list "${listName}"?`)) {
+                let savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
+                delete savedDeviceLists[listName];
+                localStorage.setItem('savedDeviceLists', JSON.stringify(savedDeviceLists));
+                loadDeviceList(); // Refresh the modal
+            }
+        }
+
+        // Save/Load functionality for command lists
+        function saveCommandList() {
+            if (commands.length === 0) {
+                alert('No commands to save');
+                return;
+            }
+            document.getElementById('saveCommandModal').style.display = 'block';
+            document.getElementById('commandListName').focus();
+        }
+
+        function closeSaveCommandModal() {
+            document.getElementById('saveCommandModal').style.display = 'none';
+            document.getElementById('commandListName').value = '';
+        }
+
+        function confirmSaveCommandList() {
+            const listName = document.getElementById('commandListName').value.trim();
+            if (!listName) {
+                alert('Please enter a list name');
+                return;
+            }
+
+            // Save to localStorage
+            let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+            savedCommandLists[listName] = {
+                commands: [...commands],
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
+
+            alert(`Command list "${listName}" saved successfully!`);
+            closeSaveCommandModal();
+        }
+
+        function loadCommandList() {
+            const savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+            const savedListsDiv = document.getElementById('savedCommandLists');
+
+            if (Object.keys(savedCommandLists).length === 0) {
+                savedListsDiv.innerHTML = '<em>No saved command lists found...</em>';
+            } else {
+                savedListsDiv.innerHTML = '';
+                for (const [listName, listData] of Object.entries(savedCommandLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${listData.commands.length} commands - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
+                    `;
+
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.className = 'delete-saved';
+                    deleteBtn.innerHTML = '✗';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteCommandList(listName);
+                    };
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.appendChild(deleteBtn);
+
+                    savedItem.onclick = () => confirmLoadCommandList(listName, listData.commands);
+                    savedListsDiv.appendChild(savedItem);
+                }
+            }
+
+            document.getElementById('loadCommandModal').style.display = 'block';
+        }
+
+        function closeLoadCommandModal() {
+            document.getElementById('loadCommandModal').style.display = 'none';
+        }
+
+        function confirmLoadCommandList(listName, commandList) {
+            if (commands.length > 0) {
+                if (!confirm(`This will replace your current command list (${commands.length} commands). Continue?`)) {
+                    return;
+                }
+            }
+
+            commands = [...commandList];
+            updateCommandList();
+            closeLoadCommandModal();
+            alert(`Command list "${listName}" loaded successfully!`);
+        }
+
+        function deleteCommandList(listName) {
+            if (confirm(`Delete command list "${listName}"?`)) {
+                let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+                delete savedCommandLists[listName];
+                localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
+                loadCommandList(); // Refresh the modal
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const modals = ['saveDeviceModal', 'loadDeviceModal', 'saveCommandModal', 'loadCommandModal', 'saveDnsServerModal', 'loadDnsServerModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        };
+
+        // Add Enter key support for save modals
+        document.getElementById('deviceListName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmSaveDeviceList();
+            }
+        });
+
+        document.getElementById('commandListName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmSaveCommandList();
+            }
+        });
+
+        // DNS Lookup functionality
+        async function performDnsLookup() {
+            const dnsInput = document.getElementById('dnsInput').value.trim();
+            const dnsServers = document.getElementById('dnsServers').value.trim();
+            const lookupType = document.getElementById('lookupType').value;
+            const dnsResults = document.getElementById('dnsResults');
+            const dnsProgress = document.getElementById('dnsProgress');
+
+            if (!dnsInput) {
+                alert('Please enter at least one domain or IP address');
+                return;
+            }
+
+            // Parse input - split by lines and filter empty lines
+            const targets = dnsInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const servers = dnsServers ? dnsServers.split('\n').map(line => line.trim()).filter(line => line.length > 0) : [];
+
+            dnsProgress.style.display = 'block';
+            dnsResults.innerHTML = 'Performing DNS lookups...';
+
+            try {
+                const response = await fetch('/api/dns-lookup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        targets: targets,
+                        servers: servers,
+                        lookup_type: lookupType
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayDnsResults(data.results);
+                } else {
+                    dnsResults.innerHTML = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                console.error('DNS lookup error:', error);
+                dnsResults.innerHTML = `Error performing DNS lookup: ${error.message}`;
+            } finally {
+                dnsProgress.style.display = 'none';
+            }
+        }
+
+        function displayDnsResults(results) {
+            const dnsResults = document.getElementById('dnsResults');
+            let output = [];
+
+            output.push('DNS LOOKUP RESULTS');
+            output.push('==================');
+            output.push('');
+
+            for (const [target, targetData] of Object.entries(results)) {
+                if (targetData.error) {
+                    output.push(`${target} - ERROR: ${targetData.error}`);
+                    output.push('');
+                    continue;
+                }
+
+                // Process results from each DNS server
+                for (const [server, serverResults] of Object.entries(targetData.servers)) {
+                    const serverName = server === 'system_default' ? 'System DNS' : server;
+
+                    if (serverResults.error) {
+                        output.push(`${target} - ERROR: ${serverResults.error} - DNS Server: ${serverName}`);
+                    } else if (serverResults.records && serverResults.records.length > 0) {
+                        serverResults.records.forEach(record => {
+                            // Simplified single-line format for A and PTR records
+                            if (record.type === 'A' || record.type === 'PTR') {
+                                const ttlInfo = record.ttl ? ` - TTL: ${record.ttl}` : '';
+                                output.push(`${target} ${record.value} - DNS Server: ${serverName}${ttlInfo}`);
+                            } else {
+                                // Keep more detailed format for other record types
+                                const ttlInfo = record.ttl ? ` - TTL: ${record.ttl}` : '';
+                                output.push(`${target} - ${record.type}: ${record.value} - DNS Server: ${serverName}${ttlInfo}`);
+                            }
+                        });
+                    } else {
+                        output.push(`${target} - No records found - DNS Server: ${serverName}`);
+                    }
+                }
+                output.push('');
+            }
+
+            dnsResults.textContent = output.join('\n');
+        }
+
+        function copyDnsResults() {
+            const dnsResults = document.getElementById('dnsResults');
+            const textToCopy = dnsResults.textContent;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // Visual feedback on the copy button
+                const copyButton = document.getElementById('copyDnsButton');
+                const originalText = copyButton.textContent;
+                copyButton.textContent = 'Copied!';
+                copyButton.style.backgroundColor = '#4caf50';
+                copyButton.style.color = 'white';
+
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                    copyButton.style.backgroundColor = '';
+                    copyButton.style.color = '';
+                }, 1000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Save/Load functionality for DNS server lists
+        function saveDnsServerList() {
+            const dnsServers = document.getElementById('dnsServers').value.trim();
+
+            if (!dnsServers) {
+                alert('No DNS servers to save');
+                return;
+            }
+
+            document.getElementById('saveDnsServerModal').style.display = 'block';
+            document.getElementById('dnsServerListName').focus();
+        }
+
+        function closeSaveDnsServerModal() {
+            document.getElementById('saveDnsServerModal').style.display = 'none';
+            document.getElementById('dnsServerListName').value = '';
+        }
+
+        function confirmSaveDnsServerList() {
+            const listName = document.getElementById('dnsServerListName').value.trim();
+            if (!listName) {
+                alert('Please enter a list name');
+                return;
+            }
+
+            const dnsServers = document.getElementById('dnsServers').value.trim();
+            const serverList = dnsServers.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+            // Save to localStorage
+            let savedDnsServerLists = JSON.parse(localStorage.getItem('savedDnsServerLists') || '{}');
+            savedDnsServerLists[listName] = {
+                servers: serverList,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('savedDnsServerLists', JSON.stringify(savedDnsServerLists));
+
+            alert(`DNS server list "${listName}" saved successfully!`);
+            closeSaveDnsServerModal();
+        }
+
+        function loadDnsServerList() {
+            const savedDnsServerLists = JSON.parse(localStorage.getItem('savedDnsServerLists') || '{}');
+            const savedListsDiv = document.getElementById('savedDnsServerLists');
+
+            if (Object.keys(savedDnsServerLists).length === 0) {
+                savedListsDiv.innerHTML = '<em>No saved DNS server lists found...</em>';
+            } else {
+                savedListsDiv.innerHTML = '';
+
+                // Add predefined common DNS server lists
+                const commonDnsLists = {
+                    'Public DNS - Google': ['8.8.8.8', '8.8.4.4'],
+                    'Public DNS - Cloudflare': ['1.1.1.1', '1.0.0.1'],
+                    'Public DNS - OpenDNS': ['208.67.222.222', '208.67.220.220'],
+                    'Public DNS - Quad9': ['9.9.9.9', '149.112.112.112'],
+                    'Public DNS - All Combined': ['8.8.8.8', '1.1.1.1', '208.67.222.222', '9.9.9.9']
+                };
+
+                // Add common DNS lists section
+                const commonHeader = document.createElement('div');
+                commonHeader.innerHTML = '<strong style="color: #007cba;">Common DNS Servers:</strong>';
+                commonHeader.style.marginBottom = '10px';
+                savedListsDiv.appendChild(commonHeader);
+
+                for (const [listName, servers] of Object.entries(commonDnsLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+                    savedItem.style.borderColor = '#007cba';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${servers.length} servers</div>
+                    `;
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.onclick = () => confirmLoadDnsServerList(listName, servers);
+                    savedListsDiv.appendChild(savedItem);
+                }
+
+                // Add separator
+                const separator = document.createElement('div');
+                separator.innerHTML = '<hr style="margin: 15px 0;"><strong style="color: #28a745;">Saved Lists:</strong>';
+                separator.style.marginBottom = '10px';
+                savedListsDiv.appendChild(separator);
+
+                // Add saved DNS lists
+                for (const [listName, listData] of Object.entries(savedDnsServerLists)) {
+                    const savedItem = document.createElement('div');
+                    savedItem.className = 'saved-item';
+
+                    const itemInfo = document.createElement('div');
+                    itemInfo.innerHTML = `
+                        <div class="saved-item-name">${listName}</div>
+                        <div class="saved-item-count">${listData.servers.length} servers - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
+                    `;
+
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.className = 'delete-saved';
+                    deleteBtn.innerHTML = '✗';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteDnsServerList(listName);
+                    };
+
+                    savedItem.appendChild(itemInfo);
+                    savedItem.appendChild(deleteBtn);
+
+                    savedItem.onclick = () => confirmLoadDnsServerList(listName, listData.servers);
+                    savedListsDiv.appendChild(savedItem);
+                }
+            }
+
+            document.getElementById('loadDnsServerModal').style.display = 'block';
+        }
+
+        function closeLoadDnsServerModal() {
+            document.getElementById('loadDnsServerModal').style.display = 'none';
+        }
+
+        function confirmLoadDnsServerList(listName, serverList) {
+            const dnsServersTextarea = document.getElementById('dnsServers');
+            const currentServers = dnsServersTextarea.value.trim();
+
+            if (currentServers) {
+                if (!confirm(`This will replace your current DNS server list. Continue?`)) {
+                    return;
+                }
+            }
+
+            dnsServersTextarea.value = serverList.join('\n');
+            closeLoadDnsServerModal();
+            alert(`DNS server list "${listName}" loaded successfully!`);
+        }
+
+        function deleteDnsServerList(listName) {
+            if (confirm(`Delete DNS server list "${listName}"?`)) {
+                let savedDnsServerLists = JSON.parse(localStorage.getItem('savedDnsServerLists') || '{}');
+                delete savedDnsServerLists[listName];
+                localStorage.setItem('savedDnsServerLists', JSON.stringify(savedDnsServerLists));
+                loadDnsServerList(); // Refresh the modal
+            }
+        }
+
+        // Add Enter key support for DNS server save modal
+        document.getElementById('dnsServerListName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmSaveDnsServerList();
+            }
+        });
 
         // Debounced translation function
         function scheduleTranslation() {

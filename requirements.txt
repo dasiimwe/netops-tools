@@ -11,3 +11,4 @@ gunicorn==22.0.0
 requests==2.32.3
 pytest==8.3.2
 pytest-cov==5.0.0
+dnspython==2.4.2
