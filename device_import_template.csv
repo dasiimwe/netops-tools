@@ -1,8 +1,0 @@
-hostname,ip_address,vendor
-fw01.company.com,192.168.1.1,paloalto
-sw01.company.com,192.168.1.10,cisco_ios
-rtr01.company.com,192.168.1.20,cisco_ios
-fw02.branch.com,10.10.1.1,fortigate
-sw02.company.com,192.168.1.11,cisco_nxos
-rtr02.company.com,192.168.1.21,cisco_iosxr
-sw03.company.com,192.168.1.12,cisco_ios
