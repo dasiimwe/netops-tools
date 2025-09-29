@@ -66,8 +66,77 @@
                 </form>
             </div>
         </div>
+
+        <!-- Password Complexity Settings Card -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Password Complexity Requirements</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="password_min_length" name="password_min_length"
+                                   {% if settings.password_min_length %}checked{% endif %}>
+                            <label class="form-check-label" for="password_min_length">
+                                <strong>Minimum 8 characters</strong>
+                            </label>
+                            <div class="form-text">Require passwords to be at least 8 characters long</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="password_require_uppercase" name="password_require_uppercase"
+                                   {% if settings.password_require_uppercase %}checked{% endif %}>
+                            <label class="form-check-label" for="password_require_uppercase">
+                                <strong>Uppercase letter (A-Z)</strong>
+                            </label>
+                            <div class="form-text">Require at least one uppercase letter</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="password_require_lowercase" name="password_require_lowercase"
+                                   {% if settings.password_require_lowercase %}checked{% endif %}>
+                            <label class="form-check-label" for="password_require_lowercase">
+                                <strong>Lowercase letter (a-z)</strong>
+                            </label>
+                            <div class="form-text">Require at least one lowercase letter</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="password_require_number" name="password_require_number"
+                                   {% if settings.password_require_number %}checked{% endif %}>
+                            <label class="form-check-label" for="password_require_number">
+                                <strong>Number (0-9)</strong>
+                            </label>
+                            <div class="form-text">Require at least one number</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="password_require_special" name="password_require_special"
+                                   {% if settings.password_require_special %}checked{% endif %}>
+                            <label class="form-check-label" for="password_require_special">
+                                <strong>Special character</strong>
+                            </label>
+                            <div class="form-text">Require at least one special character (!@#$%^&* etc.)</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-shield-check"></i> Update Password Rules
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">

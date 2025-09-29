@@ -132,7 +132,10 @@
     </style>
 </head>
 <body>
-    <h2>Netops Toolkit</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Netops Toolkit</h2>
+        <a href="{{ url_for('main.admin') }}" style="color: #0000EE; text-decoration: underline;">Admin Dashboard →</a>
+    </div>
 
     <div class="tabs">
         <div class="tab active" onclick="showTab('ip-translator')">IP Translator</div>
@@ -233,53 +236,49 @@
     <div id="dns-lookup" class="tab-content">
         <p>Bulk DNS Lookup Tool</p>
 
-        <div style="display: flex; gap: 20px;">
-            <div style="flex: 2;">
-                <label><strong>Domains/IP Addresses (one per line):</strong></label>
-                <br>
-                <textarea
-                    id="dnsInput"
-                    rows="10"
-                    cols="50"
-                    placeholder="Enter domains or IP addresses, one per line:&#10;example.com&#10;google.com&#10;192.168.1.1&#10;8.8.8.8"
-                    style="width: 100%; font-family: monospace;"></textarea>
-            </div>
+        <div>
+            <label><strong>Domains/IP Addresses (one per line):</strong></label>
+            <br>
+            <textarea
+                id="dnsInput"
+                rows="10"
+                cols="50"
+                placeholder="Enter domains or IP addresses, one per line:&#10;example.com&#10;google.com&#10;192.168.1.1&#10;8.8.8.8"
+                style="width: 50%; font-family: monospace;"></textarea>
 
-            <div style="flex: 1;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="margin-top: 15px;">
+                <!-- DNS Servers Section -->
+                <div style="display: flex; align-items: center; gap: 10px;">
                     <label><strong>DNS Servers (optional):</strong></label>
-                    <div>
-                        <button onclick="saveDnsServerList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
-                        <button onclick="loadDnsServerList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
-                    </div>
+                    <span style="font-size: 12px; color: #666;">Leave empty for system default</span>
+                    <button onclick="saveDnsServerList()" style="padding: 4px 8px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
+                    <button onclick="loadDnsServerList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
                 </div>
-                <div style="margin: 10px 0; font-size: 12px; color: #666;">
-                    Leave empty to use system default DNS servers
-                </div>
+
                 <textarea
                     id="dnsServers"
-                    rows="5"
+                    rows="3"
                     cols="30"
-                    placeholder=""
-                    style="width: 100%; font-family: monospace;"></textarea>
+                    placeholder="8.8.8.8&#10;1.1.1.1"
+                    style="width: 50%; font-family: monospace; margin-top: 5px;"></textarea>
 
-                <div style="margin-top: 20px;">
-                    <label><strong>Lookup Type:</strong></label><br>
-                    <select id="lookupType" style="width: 100%; padding: 5px; margin: 5px 0;">
-                        <option value="A">A Record (IPv4)</option>
-                        <option value="AAAA">AAAA Record (IPv6)</option>
-                        <option value="CNAME">CNAME Record</option>
-                        <option value="MX">MX Record</option>
-                        <option value="NS">NS Record</option>
-                        <option value="PTR">PTR Record (Reverse)</option>
-                        <option value="TXT">TXT Record</option>
-                        <option value="ALL">All Records</option>
-                    </select>
-                </div>
-
-                <div style="margin-top: 20px;">
-                    <button onclick="performDnsLookup()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; width: 100%;">Perform DNS Lookup</button>
-                    <div id="dnsProgress" style="display: none; margin-top: 10px; text-align: center;">
+                <!-- Lookup Type on same line as button -->
+                <div style="margin-top: 15px;">
+                    <label style="display: inline-block; margin-right: 10px;">
+                        <strong>Lookup Type:</strong>
+                        <select id="lookupType" style="padding: 5px; margin-left: 5px;">
+                            <option value="A">A Record (IPv4)</option>
+                            <option value="AAAA">AAAA Record (IPv6)</option>
+                            <option value="CNAME">CNAME Record</option>
+                            <option value="MX">MX Record</option>
+                            <option value="NS">NS Record</option>
+                            <option value="PTR">PTR Record (Reverse)</option>
+                            <option value="TXT">TXT Record</option>
+                            <option value="ALL">All Records</option>
+                        </select>
+                    </label>
+                    <button onclick="performDnsLookup()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Perform DNS Lookup</button>
+                    <div id="dnsProgress" style="display: none; margin-top: 10px;">
                         <div>Performing DNS lookups... Please wait.</div>
                     </div>
                 </div>
@@ -304,58 +303,49 @@
     <div id="traceroute" class="tab-content">
         <p>Parallel Traceroute Tool</p>
 
-        <div style="display: flex; gap: 20px;">
-            <div style="flex: 2;">
-                <label><strong>Target Hosts (one per line):</strong></label>
-                <br>
-                <textarea
-                    id="tracerouteTargets"
-                    rows="10"
-                    cols="50"
-                    placeholder="Enter IP addresses or hostnames, one per line:&#10;192.168.1.1&#10;google.com&#10;8.8.8.8&#10;github.com"
-                    style="width: 100%; font-family: monospace;"></textarea>
-            </div>
+        <div>
+            <label><strong>Target Hosts (one per line):</strong></label>
+            <br>
+            <textarea
+                id="tracerouteTargets"
+                rows="10"
+                cols="50"
+                placeholder="Enter IP addresses or hostnames, one per line:&#10;192.168.1.1&#10;google.com&#10;8.8.8.8&#10;github.com"
+                style="width: 50%; font-family: monospace;"></textarea>
 
-            <div style="flex: 1;">
+            <div style="margin-top: 15px;">
                 <label><strong>Traceroute Options:</strong></label>
 
-                <div style="margin: 15px 0;">
-                    <label>Max Hops (TTL):</label><br>
-                    <input type="number" id="maxHops" min="1" max="255" value="30" style="width: 100%; padding: 5px;">
-                </div>
-
-                <div style="margin: 15px 0;">
-                    <label>Timeout (seconds):</label><br>
-                    <input type="number" id="traceTimeout" min="1" max="60" value="1" style="width: 100%; padding: 5px;">
-                </div>
-
-                <div style="margin: 15px 0;">
-                    <label>Probes per hop:</label><br>
-                    <input type="number" id="probesPerHop" min="1" max="10" value="1" style="width: 100%; padding: 5px;">
-                </div>
-
-                <div style="margin: 15px 0;">
-                    <label>Packet size (bytes):</label><br>
-                    <input type="number" id="packetSize" min="28" max="65000" value="60" style="width: 100%; padding: 5px;">
-                </div>
-
-                <div style="margin: 15px 0;">
-                    <label>
-                        <input type="checkbox" id="translateIPs" checked>
-                        Translate IP addresses
+                <!-- Compact options in a single line -->
+                <div style="margin: 10px 0;">
+                    <label style="display: inline-block; margin-right: 15px;">
+                        Max Hops: <input type="number" id="maxHops" min="1" max="255" value="30" style="width: 50px; padding: 2px;">
+                    </label>
+                    <label style="display: inline-block; margin-right: 15px;">
+                        Timeout (s): <input type="number" id="traceTimeout" min="1" max="60" value="1" style="width: 50px; padding: 2px;">
+                    </label>
+                    <label style="display: inline-block; margin-right: 15px;">
+                        Probes/hop: <input type="number" id="probesPerHop" min="1" max="10" value="1" style="width: 50px; padding: 2px;">
+                    </label>
+                    <label style="display: inline-block;">
+                        Packet size: <input type="number" id="packetSize" min="28" max="65000" value="60" style="width: 60px; padding: 2px;"> bytes
                     </label>
                 </div>
 
-                <div style="margin: 15px 0;">
+                <div style="margin: 10px 0;">
+                    <label style="margin-right: 20px;">
+                        <input type="checkbox" id="translateIPs" checked>
+                        Translate IP addresses
+                    </label>
                     <label>
                         <input type="checkbox" id="resolveHostnames" checked>
                         Resolve hostnames
                     </label>
                 </div>
 
-                <div style="margin-top: 20px;">
-                    <button onclick="performTraceroute()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; width: 100%;">Run Traceroute</button>
-                    <div id="tracerouteProgress" style="display: none; margin-top: 10px; text-align: center;">
+                <div style="margin-top: 15px;">
+                    <button onclick="performTraceroute()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Run Traceroute</button>
+                    <div id="tracerouteProgress" style="display: none; margin-top: 10px;">
                         <div id="tracerouteProgressText">Running traceroutes... Please wait.</div>
                         <div id="tracerouteProgressDetail" style="margin-top: 5px; font-size: 12px; color: #666;"></div>
                     </div>

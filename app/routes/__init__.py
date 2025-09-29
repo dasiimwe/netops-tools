@@ -8,8 +8,9 @@ settings_bp = Blueprint('settings', __name__)
 credential_bp = Blueprint('credentials', __name__)
 main_bp = Blueprint('main', __name__)
 session_logs_bp = Blueprint('session_logs', __name__)
+setup_bp = Blueprint('setup', __name__)
 
 # Import routes to register them
-from . import auth_routes, device_routes, interface_routes, settings_routes, credential_routes, main_routes, session_logs_routes
+from . import auth_routes, device_routes, interface_routes, settings_routes, credential_routes, main_routes, session_logs_routes, setup_routes
 
-__all__ = ['auth_bp', 'device_bp', 'interface_bp', 'settings_bp', 'credential_bp', 'main_bp', 'session_logs_bp']
+__all__ = ['auth_bp', 'device_bp', 'interface_bp', 'settings_bp', 'credential_bp', 'main_bp', 'session_logs_bp', 'setup_bp']

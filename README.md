@@ -20,14 +20,28 @@ Comprehensive network operations toolkit with device management, IP translation,
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 
-# Configure encryption key in .env
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-# Initialize and run
+# Initialize database
 python init_db.py
+
+# Run application
 python run.py
+```
+
+### First-Time Setup
+
+When you first run the application, you'll be automatically redirected to the **Setup Wizard** at `http://localhost:5000/setup` which will:
+
+1. **Generate Environment Configuration** - Automatically creates `.env` file with secure encryption keys
+2. **Create Admin User** - Set up your administrator account with strong password requirements
+3. **Complete Setup** - Ready to start managing network devices
+
+**Manual Setup Alternative:**
+```bash
+# If you prefer manual setup
+cp .env.example .env
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Add the generated key to ENCRYPTION_KEY in .env
 ```
 
 Access at http://localhost:5000

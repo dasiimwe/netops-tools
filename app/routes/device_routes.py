@@ -326,42 +326,47 @@ def bulk_import():
 @device_bp.route('/bulk-import/template')
 @login_required
 def download_template():
-    """Download CSV template for device import"""
-    template_path = os.path.join(os.path.dirname(current_app.root_path), 'device_import_template.csv')
+    """Download CSV template for device import - generated dynamically"""
+    output = io.StringIO()
+    writer = csv.writer(output)
 
-    if os.path.exists(template_path):
-        return send_file(template_path, as_attachment=True,
-                        download_name='device_import_template.csv')
-    else:
-        # Generate template on the fly if file doesn't exist
-        output = io.StringIO()
-        writer = csv.writer(output)
+    # Header row
+    writer.writerow([
+        'hostname', 'ip_address', 'vendor'
+    ])
 
-        # Header row
-        writer.writerow([
-            'hostname', 'ip_address', 'vendor'
-        ])
+    # Sample rows with all supported vendors
+    writer.writerow([
+        'fw01.company.com', '192.168.1.1', 'paloalto'
+    ])
+    writer.writerow([
+        'sw01.company.com', '192.168.1.10', 'cisco_ios'
+    ])
+    writer.writerow([
+        'rtr01.company.com', '192.168.1.20', 'cisco_ios'
+    ])
+    writer.writerow([
+        'fw02.branch.com', '10.10.1.1', 'fortigate'
+    ])
+    writer.writerow([
+        'sw02.company.com', '192.168.1.11', 'cisco_nxos'
+    ])
+    writer.writerow([
+        'rtr02.company.com', '192.168.1.21', 'cisco_iosxr'
+    ])
+    writer.writerow([
+        'sw03.company.com', '192.168.1.12', 'cisco_ios'
+    ])
 
-        # Sample rows
-        writer.writerow([
-            'fw01.company.com', '192.168.1.1', 'paloalto'
-        ])
-        writer.writerow([
-            'sw01.company.com', '192.168.1.10', 'cisco_ios'
-        ])
-        writer.writerow([
-            'rtr01.company.com', '192.168.1.20', 'cisco_ios'
-        ])
+    output.seek(0)
 
-        output.seek(0)
-
-        # Create response
-        response = current_app.response_class(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=device_import_template.csv'}
-        )
-        return response
+    # Create response
+    response = current_app.response_class(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=device_import_template.csv'}
+    )
+    return response
 
 
 def process_device_csv(csv_content):

@@ -57,22 +57,34 @@ def update_local_password(user: User, new_password: str) -> bool:
     return True
 
 def validate_password_strength(password: str) -> tuple:
-    """Validate password strength"""
+    """Validate password strength based on admin settings"""
+    from app.models import Settings
+
     errors = []
-    
-    if len(password) < 8:
-        errors.append("Password must be at least 8 characters long")
-    
-    if not any(c.isupper() for c in password):
-        errors.append("Password must contain at least one uppercase letter")
-    
-    if not any(c.islower() for c in password):
-        errors.append("Password must contain at least one lowercase letter")
-    
-    if not any(c.isdigit() for c in password):
-        errors.append("Password must contain at least one number")
-    
-    if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
-        errors.append("Password must contain at least one special character")
-    
+
+    # Check minimum length (if enabled)
+    if Settings.get_value('password_min_length', True):
+        if len(password) < 8:
+            errors.append("Password must be at least 8 characters long")
+
+    # Check uppercase requirement (if enabled)
+    if Settings.get_value('password_require_uppercase', True):
+        if not any(c.isupper() for c in password):
+            errors.append("Password must contain at least one uppercase letter")
+
+    # Check lowercase requirement (if enabled)
+    if Settings.get_value('password_require_lowercase', True):
+        if not any(c.islower() for c in password):
+            errors.append("Password must contain at least one lowercase letter")
+
+    # Check number requirement (if enabled)
+    if Settings.get_value('password_require_number', True):
+        if not any(c.isdigit() for c in password):
+            errors.append("Password must contain at least one number")
+
+    # Check special character requirement (if enabled)
+    if Settings.get_value('password_require_special', True):
+        if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+            errors.append("Password must contain at least one special character")
+
     return len(errors) == 0, errors

@@ -39,7 +39,8 @@ def create_app(config_name='default'):
     setup_logging(app)
     
     # Register blueprints
-    from app.routes import auth_bp, device_bp, interface_bp, settings_bp, credential_bp, main_bp, session_logs_bp
+    from app.routes import auth_bp, device_bp, interface_bp, settings_bp, credential_bp, main_bp, session_logs_bp, setup_bp
+    app.register_blueprint(setup_bp, url_prefix='/setup')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(device_bp, url_prefix='/devices')
     app.register_blueprint(interface_bp, url_prefix='/interfaces')
@@ -53,9 +54,35 @@ def create_app(config_name='default'):
     def load_user(user_id):
         from app.models import User
         return User.query.get(int(user_id))
-    
+
+    # Setup check - redirect to setup if not complete
+    @app.before_request
+    def check_setup():
+        from flask import request, redirect, url_for
+        from app.routes.setup_routes import is_setup_complete
+
+        # Skip setup check for static files and setup routes
+        if (request.endpoint and
+            (request.endpoint.startswith('static') or
+             request.endpoint.startswith('setup.'))):
+            return None
+
+        # Skip setup check for the main index page (IP translator)
+        if request.endpoint == 'main.index':
+            return None
+
+        # Check if setup is complete
+        try:
+            if not is_setup_complete():
+                return redirect(url_for('setup.index'))
+        except Exception:
+            # If we can't check setup status, allow normal operation
+            pass
+
+        return None
+
     # Database initialization is handled by init_db.py script
-    
+
     return app
 
 def setup_logging(app):

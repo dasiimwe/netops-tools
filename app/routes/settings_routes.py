@@ -23,7 +23,13 @@ def index():
         'tacacs_server': Settings.get_value('tacacs_server', ''),
         'tacacs_port': Settings.get_value('tacacs_port', 49),
         'tacacs_timeout': Settings.get_value('tacacs_timeout', 10),
-        'tacacs_secret': Settings.get_value('tacacs_secret', '')
+        'tacacs_secret': Settings.get_value('tacacs_secret', ''),
+        # Password complexity settings
+        'password_min_length': Settings.get_value('password_min_length', True),
+        'password_require_uppercase': Settings.get_value('password_require_uppercase', True),
+        'password_require_lowercase': Settings.get_value('password_require_lowercase', True),
+        'password_require_number': Settings.get_value('password_require_number', True),
+        'password_require_special': Settings.get_value('password_require_special', True)
     }
     
     return render_template('settings/index.html', settings=settings)
@@ -94,6 +100,32 @@ def update():
                           tacacs_secret,
                           'string',
                           'TACACS+ shared secret key')
+
+    # Update password complexity settings
+    Settings.set_value('password_min_length',
+                      request.form.get('password_min_length') == 'on',
+                      'bool',
+                      'Require minimum 8 characters for passwords')
+
+    Settings.set_value('password_require_uppercase',
+                      request.form.get('password_require_uppercase') == 'on',
+                      'bool',
+                      'Require at least one uppercase letter in passwords')
+
+    Settings.set_value('password_require_lowercase',
+                      request.form.get('password_require_lowercase') == 'on',
+                      'bool',
+                      'Require at least one lowercase letter in passwords')
+
+    Settings.set_value('password_require_number',
+                      request.form.get('password_require_number') == 'on',
+                      'bool',
+                      'Require at least one number in passwords')
+
+    Settings.set_value('password_require_special',
+                      request.form.get('password_require_special') == 'on',
+                      'bool',
+                      'Require at least one special character in passwords')
 
     # Log settings update
     audit_log = AuditLog(

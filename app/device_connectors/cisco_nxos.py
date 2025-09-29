@@ -2,14 +2,40 @@ import re
 from typing import Dict, List
 from .base_connector import BaseConnector
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class CiscoNXOSConnector(BaseConnector):
     """Connector for Cisco NXOS devices"""
-    
+
     def get_netmiko_device_type(self) -> str:
         return 'cisco_nxos'
+
+    def execute_command(self, command: str) -> str:
+        """Execute command with NXOS-specific optimizations"""
+        if not self.connection:
+            raise RuntimeError(f"Not connected to {self.host}")
+
+        start_time = datetime.now()
+        self._log_session_event('command_sent', command=command)
+
+        try:
+            # For NXOS, try with explicit expect string first
+            output = self.connection.send_command(
+                command,
+                expect_string=r'[\#\>]',
+                read_timeout=60,
+                strip_prompt=True,
+                strip_command=True
+            )
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            self._log_session_event('command_response', command=command, response=output, duration_ms=duration_ms)
+            return output
+        except Exception as e:
+            # Fall back to parent class robust method
+            logger.warning(f"NXOS-specific method failed for '{command}' on {self.host}, falling back to base method")
+            return super().execute_command(command)
     
     def get_interface_commands(self) -> List[str]:
         return [

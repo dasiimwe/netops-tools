@@ -136,7 +136,7 @@ class BaseConnector(ABC):
                 self.connection = None
     
     def execute_command(self, command: str) -> str:
-        """Execute a command on the device"""
+        """Execute a command on the device with robust error handling"""
         if not self.connection:
             raise RuntimeError(f"Not connected to {self.host}")
 
@@ -144,15 +144,75 @@ class BaseConnector(ABC):
         self._log_session_event('command_sent', command=command)
 
         try:
-            output = self.connection.send_command(command)
+            # First attempt with standard send_command
+            output = self.connection.send_command(command, read_timeout=30)
             duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
             self._log_session_event('command_response', command=command, response=output, duration_ms=duration_ms)
             return output
         except Exception as e:
-            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-            self._log_session_event('command_failed', command=command, error_message=str(e), duration_ms=duration_ms)
-            logger.error(f"Error executing command '{command}' on {self.host}: {str(e)}")
-            raise
+            error_msg = str(e).lower()
+
+            # Handle "pattern not detected" errors for Cisco devices
+            if "pattern" in error_msg and "not" in error_msg:
+                logger.warning(f"Pattern detection failed for '{command}' on {self.host}, trying alternative method")
+
+                try:
+                    # Try with extended timeout and different parameters
+                    output = self.connection.send_command(
+                        command,
+                        expect_string=r'#',
+                        read_timeout=60,
+                        strip_prompt=False,
+                        strip_command=False
+                    )
+
+                    # Clean up the output
+                    if output:
+                        lines = output.split('\n')
+                        # Remove the command echo (first line) and prompt (last line)
+                        if len(lines) > 2:
+                            output = '\n'.join(lines[1:-1])
+                        elif len(lines) > 1:
+                            output = '\n'.join(lines[1:])
+
+                    duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                    self._log_session_event('command_response', command=command, response=output, duration_ms=duration_ms)
+                    logger.info(f"Alternative method succeeded for '{command}' on {self.host}")
+                    return output
+
+                except Exception as e2:
+                    # Try one more time with send_command_timing (no prompt detection)
+                    try:
+                        logger.warning(f"Trying timing-based method for '{command}' on {self.host}")
+                        output = self.connection.send_command_timing(command, delay_factor=2)
+
+                        # Clean up output
+                        if output:
+                            lines = output.split('\n')
+                            # Remove command echo and trailing prompt
+                            cleaned_lines = []
+                            for line in lines:
+                                line = line.strip()
+                                if line and not line.endswith('#') and not line.endswith('>') and line != command.strip():
+                                    cleaned_lines.append(line)
+                            output = '\n'.join(cleaned_lines)
+
+                        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                        self._log_session_event('command_response', command=command, response=output, duration_ms=duration_ms)
+                        logger.info(f"Timing-based method succeeded for '{command}' on {self.host}")
+                        return output
+
+                    except Exception as e3:
+                        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                        error_details = f"All methods failed - Original: {str(e)}, Alternative: {str(e2)}, Timing: {str(e3)}"
+                        self._log_session_event('command_failed', command=command, error_message=error_details, duration_ms=duration_ms)
+                        logger.error(f"Error executing command '{command}' on {self.host}: {error_details}")
+                        raise Exception(f"Command execution failed: {error_details}")
+            else:
+                duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                self._log_session_event('command_failed', command=command, error_message=str(e), duration_ms=duration_ms)
+                logger.error(f"Error executing command '{command}' on {self.host}: {str(e)}")
+                raise
     
     def get_interfaces(self) -> List[Dict]:
         """Get interface information from device"""

@@ -202,3 +202,7 @@ temp/
 # Markdown files (except README.md)
 *.md
 !README.md
+
+# Template files (generated dynamically)
+*_template.csv
+device_import_template.csv

@@ -131,7 +131,11 @@ def edit_user(user_id):
         user.username = request.form.get('username')
         user.email = request.form.get('email')
         user.is_admin = request.form.get('is_admin') == 'on'
-        user.is_active = request.form.get('is_active') == 'on'
+
+        # Only allow changing is_active status when not editing your own account
+        # (disabled checkboxes don't get submitted in forms)
+        if user.id != current_user.id:
+            user.is_active = request.form.get('is_active') == 'on'
         
         # Update password if provided (only for local users)
         new_password = request.form.get('new_password')

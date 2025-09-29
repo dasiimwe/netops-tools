@@ -22,9 +22,10 @@ def index():
     """Index page with IP translator - no login required"""
     return render_template('index.html')
 
-@main_bp.route('/dashboard')
+@main_bp.route('/admin')
+@main_bp.route('/admin/')
 @login_required
-def dashboard():
+def admin():
     # Get statistics
     total_devices = Device.query.count()
     reachable_devices = Device.query.filter_by(is_reachable=True).count()
