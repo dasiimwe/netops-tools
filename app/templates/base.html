@@ -94,8 +94,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'credentials' in request.endpoint %}active{% endif %}" href="{{ url_for('credentials.list_credentials') }}">
+                            <a class="nav-link {% if 'credentials' in request.endpoint and 'credential_pools' not in request.endpoint %}active{% endif %}" href="{{ url_for('credentials.list_credentials') }}">
                                 <i class="bi bi-key"></i> Credentials
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'credential_pools' in request.endpoint %}active{% endif %}" href="{{ url_for('credential_pools.list_pools') }}">
+                                <i class="bi bi-collection"></i> Credential Pools
                             </a>
                         </li>
                         {% if current_user.is_admin %}

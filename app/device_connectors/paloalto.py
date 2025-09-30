@@ -18,7 +18,7 @@ class PaloAltoConnector(BaseConnector):
             'show interface logical'
         ]
     
-    def parse_interfaces(self, command_outputs: Dict[str, str]) -> List[Dict]:
+    def parse_interfaces(self, command_outputs: Dict[str, str], progress_callback=None) -> List[Dict]:
         interfaces = {}
         
         # Parse physical interfaces

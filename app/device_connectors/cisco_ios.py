@@ -18,7 +18,7 @@ class CiscoIOSConnector(BaseConnector):
             'show ipv6 interface brief'
         ]
     
-    def parse_interfaces(self, command_outputs: Dict[str, str]) -> List[Dict]:
+    def parse_interfaces(self, command_outputs: Dict[str, str], progress_callback=None) -> List[Dict]:
         interfaces = {}
 
         # Parse interface descriptions

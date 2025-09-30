@@ -39,13 +39,14 @@ def create_app(config_name='default'):
     setup_logging(app)
     
     # Register blueprints
-    from app.routes import auth_bp, device_bp, interface_bp, settings_bp, credential_bp, main_bp, session_logs_bp, setup_bp
+    from app.routes import auth_bp, device_bp, interface_bp, settings_bp, credential_bp, credential_pool_bp, main_bp, session_logs_bp, setup_bp
     app.register_blueprint(setup_bp, url_prefix='/setup')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(device_bp, url_prefix='/devices')
     app.register_blueprint(interface_bp, url_prefix='/interfaces')
     app.register_blueprint(settings_bp, url_prefix='/settings')
     app.register_blueprint(credential_bp, url_prefix='/credentials')
+    app.register_blueprint(credential_pool_bp, url_prefix='/credential-pools')
     app.register_blueprint(session_logs_bp, url_prefix='/session-logs')
     app.register_blueprint(main_bp)
     

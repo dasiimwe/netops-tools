@@ -188,6 +188,115 @@ class Credential(db.Model):
     def __repr__(self):
         return f'<Credential {self.name}>'
 
+class CredentialPool(db.Model):
+    __tablename__ = 'credential_pools'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    creator = db.relationship('User', backref='created_credential_pools')
+    credentials = db.relationship('CredentialPoolMember', backref='pool', cascade='all, delete-orphan')
+    device_assignments = db.relationship('DeviceCredentialAssignment', backref='credential_pool')
+
+    @staticmethod
+    def get_default():
+        """Get the default credential pool"""
+        return CredentialPool.query.filter_by(is_default=True).first()
+
+    def set_as_default(self):
+        """Set this credential pool as the default, removing default from others"""
+        # Remove default flag from all other credential pools
+        CredentialPool.query.update({CredentialPool.is_default: False})
+        # Set this credential pool as default
+        self.is_default = True
+        db.session.commit()
+
+    def get_credentials_list(self):
+        """Get ordered list of credentials in this pool"""
+        return [member.credential for member in
+                db.session.query(CredentialPoolMember)
+                .filter_by(pool_id=self.id)
+                .order_by(CredentialPoolMember.order)
+                .all()]
+
+    def __repr__(self):
+        return f'<CredentialPool {self.name}>'
+
+class CredentialPoolMember(db.Model):
+    __tablename__ = 'credential_pool_members'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pool_id = db.Column(db.Integer, db.ForeignKey('credential_pools.id'), nullable=False)
+    credential_id = db.Column(db.Integer, db.ForeignKey('credentials.id'), nullable=False)
+    order = db.Column(db.Integer, nullable=False, default=1)  # Order to try credentials
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    credential = db.relationship('Credential', backref='pool_memberships')
+
+    # Unique constraint to prevent duplicate credentials in same pool
+    __table_args__ = (
+        db.UniqueConstraint('pool_id', 'credential_id', name='_pool_credential_uc'),
+    )
+
+    def __repr__(self):
+        return f'<CredentialPoolMember pool={self.pool.name} credential={self.credential.name} order={self.order}>'
+
+class DeviceCredentialAssignment(db.Model):
+    __tablename__ = 'device_credential_assignments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+    assignment_type = db.Column(db.String(20), nullable=False)  # 'credential' or 'pool'
+    credential_id = db.Column(db.Integer, db.ForeignKey('credentials.id'), nullable=True)
+    credential_pool_id = db.Column(db.Integer, db.ForeignKey('credential_pools.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    assigned_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    device = db.relationship('Device', backref='credential_assignment')
+    credential = db.relationship('Credential', backref='device_assignments')
+    assignor = db.relationship('User', backref='credential_assignments')
+
+    # Unique constraint - one assignment per device
+    __table_args__ = (
+        db.UniqueConstraint('device_id', name='_device_credential_assignment_uc'),
+        db.CheckConstraint(
+            "(assignment_type = 'credential' AND credential_id IS NOT NULL AND credential_pool_id IS NULL) OR "
+            "(assignment_type = 'pool' AND credential_id IS NULL AND credential_pool_id IS NOT NULL)",
+            name='_assignment_type_check'
+        ),
+    )
+
+    def get_credentials_to_try(self, encryption_key):
+        """Get list of credentials to try for this device in order"""
+        if self.assignment_type == 'credential':
+            return [(self.credential, self.credential.get_credentials(encryption_key))]
+        elif self.assignment_type == 'pool':
+            credentials_list = []
+            for credential in self.credential_pool.get_credentials_list():
+                try:
+                    username, password = credential.get_credentials(encryption_key)
+                    credentials_list.append((credential, (username, password)))
+                except Exception as e:
+                    # Skip credentials that can't be decrypted
+                    continue
+            return credentials_list
+        return []
+
+    def __repr__(self):
+        if self.assignment_type == 'credential':
+            return f'<DeviceCredentialAssignment device={self.device.hostname} credential={self.credential.name}>'
+        else:
+            return f'<DeviceCredentialAssignment device={self.device.hostname} pool={self.credential_pool.name}>'
+
 class SessionLog(db.Model):
     __tablename__ = 'session_logs'
     

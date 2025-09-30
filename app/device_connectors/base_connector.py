@@ -44,7 +44,7 @@ class BaseConnector(ABC):
         pass
     
     @abstractmethod
-    def parse_interfaces(self, command_outputs: Dict[str, str]) -> List[Dict]:
+    def parse_interfaces(self, command_outputs: Dict[str, str], progress_callback=None) -> List[Dict]:
         """Parse command outputs and return list of interface dictionaries"""
         pass
 
@@ -214,7 +214,7 @@ class BaseConnector(ABC):
                 logger.error(f"Error executing command '{command}' on {self.host}: {str(e)}")
                 raise
     
-    def get_interfaces(self) -> List[Dict]:
+    def get_interfaces(self, progress_callback=None) -> List[Dict]:
         """Get interface information from device"""
         session_start_time = datetime.now()
         self._log_session_event('interface_collection_start')
@@ -239,12 +239,13 @@ class BaseConnector(ABC):
 
             # Parse the interface data
             parse_start_time = datetime.now()
-            interfaces = self.parse_interfaces(command_outputs)
+            interfaces = self.parse_interfaces(command_outputs, progress_callback)
 
-            # Filter interfaces with IP addresses
+            # Filter interfaces with IP addresses (exclude empty strings and None values)
             interfaces_with_ip = [
                 intf for intf in interfaces
-                if intf.get('ipv4_address') or intf.get('ipv6_address')
+                if (intf.get('ipv4_address') and intf.get('ipv4_address').strip()) or
+                   (intf.get('ipv6_address') and intf.get('ipv6_address').strip())
             ]
 
             # Log the results

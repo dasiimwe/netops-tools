@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Add Credential Pool - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Add Credential Pool</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('credential_pools.add_pool') }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Pool Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="e.g., Production Devices, Lab Environment">
+                        <div class="form-text">A unique name to identify this credential pool</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Describe the purpose of this credential pool"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_default" name="is_default">
+                            <label class="form-check-label" for="is_default">
+                                <strong>Set as Default Pool</strong>
+                            </label>
+                            <div class="form-text">
+                                Default pool will be used when no specific credentials are assigned to a device
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        After creating the pool, you'll be able to add credentials and set their priority order.
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Create Pool
+                        </button>
+                        <a href="{{ url_for('credential_pools.list_pools') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">About Credential Pools</h5>
+                <p class="card-text">
+                    Credential pools allow you to group multiple credentials together and try them in order
+                    when connecting to devices.
+                </p>
+                <ul>
+                    <li>Add multiple credentials to a pool</li>
+                    <li>Set priority order for trying credentials</li>
+                    <li>Assign pools to devices or device groups</li>
+                    <li>Automatic failover to next credential on failure</li>
+                </ul>
+                <p class="card-text">
+                    <strong>Use Cases:</strong>
+                </p>
+                <ul>
+                    <li>Password rotation scenarios</li>
+                    <li>Mixed vendor environments</li>
+                    <li>Different access levels (read-only vs admin)</li>
+                    <li>Legacy device support</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

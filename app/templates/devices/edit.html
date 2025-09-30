@@ -52,6 +52,98 @@
                 </form>
             </div>
         </div>
+
+        <!-- Credential Assignment Card -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Credential Assignment</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('devices.assign_credentials', device_id=device.id) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Assignment Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="assignment_type" id="assignment_none" value="none"
+                                   {% if not device_assignment %}checked{% endif %} onchange="toggleCredentialOptions()">
+                            <label class="form-check-label" for="assignment_none">
+                                Use Default (System Default)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="assignment_type" id="assignment_credential" value="credential"
+                                   {% if device_assignment and device_assignment.assignment_type == 'credential' %}checked{% endif %} onchange="toggleCredentialOptions()">
+                            <label class="form-check-label" for="assignment_credential">
+                                Specific Credential
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="assignment_type" id="assignment_pool" value="pool"
+                                   {% if device_assignment and device_assignment.assignment_type == 'pool' %}checked{% endif %} onchange="toggleCredentialOptions()">
+                            <label class="form-check-label" for="assignment_pool">
+                                Credential Pool
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="credential_select" style="display: none;">
+                        <label for="credential_id" class="form-label">Select Credential</label>
+                        <select class="form-select" id="credential_id" name="credential_id">
+                            <option value="">-- Select a credential --</option>
+                            {% for credential in available_credentials %}
+                            <option value="{{ credential.id }}"
+                                    {% if device_assignment and device_assignment.credential_id == credential.id %}selected{% endif %}>
+                                {{ credential.name }} ({{ credential.username }} - {{ credential.credential_type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="pool_select" style="display: none;">
+                        <label for="credential_pool_id" class="form-label">Select Credential Pool</label>
+                        <select class="form-select" id="credential_pool_id" name="credential_pool_id">
+                            <option value="">-- Select a credential pool --</option>
+                            {% for pool in available_pools %}
+                            <option value="{{ pool.id }}"
+                                    {% if device_assignment and device_assignment.credential_pool_id == pool.id %}selected{% endif %}>
+                                {{ pool.name }} ({{ pool.credentials|length }} credentials)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <strong>Current Assignment:</strong>
+                            {% if device_assignment %}
+                                {% if device_assignment.assignment_type == 'credential' %}
+                                    Credential: {{ device_assignment.credential.name }}
+                                {% elif device_assignment.assignment_type == 'pool' %}
+                                    Pool: {{ device_assignment.credential_pool.name }}
+                                {% endif %}
+                            {% else %}
+                                Using system default
+                                {% if default_pool %}
+                                    (Default Pool: {{ default_pool.name }})
+                                {% endif %}
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-key"></i> Update Credentials
+                        </button>
+                        {% if device_assignment %}
+                        <form method="POST" action="{{ url_for('devices.remove_credential_assignment', device_id=device.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-outline-warning w-100">
+                                <i class="bi bi-x-circle"></i> Remove Assignment
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
     
     <div class="col-md-4">
@@ -111,9 +203,84 @@
                             <i class="bi bi-arrow-repeat"></i> Collect Interfaces
                         </button>
                     </form>
+                    <button type="button" class="btn btn-outline-info w-100" onclick="testConnection()">
+                        <i class="bi bi-shield-check"></i> Test Connection
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function toggleCredentialOptions() {
+    const assignmentType = document.querySelector('input[name="assignment_type"]:checked').value;
+    const credentialSelect = document.getElementById('credential_select');
+    const poolSelect = document.getElementById('pool_select');
+
+    // Hide both initially
+    credentialSelect.style.display = 'none';
+    poolSelect.style.display = 'none';
+
+    // Show relevant option
+    if (assignmentType === 'credential') {
+        credentialSelect.style.display = 'block';
+    } else if (assignmentType === 'pool') {
+        poolSelect.style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCredentialOptions();
+});
+
+function testConnection() {
+    const deviceId = {{ device.id }};
+    const hostname = "{{ device.hostname }}";
+
+    // Disable button and show loading
+    const button = event.target;
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Testing...';
+
+    fetch(`/devices/${deviceId}/test-connection`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+
+        if (data.success) {
+            alert(`✅ Connection to ${hostname} successful!\n\nCredential used: ${data.credential_name}\nConnection time: ${data.connection_time}ms`);
+        } else {
+            alert(`❌ Connection to ${hostname} failed!\n\nError: ${data.error}\n\nCredentials tried: ${data.credentials_tried || 0}`);
+        }
+    })
+    .catch(error => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+
+        alert(`❌ Error testing connection to ${hostname}\n\nError: ${error.message}`);
+    });
+}
+</script>
+
+<style>
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}

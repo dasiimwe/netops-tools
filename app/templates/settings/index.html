@@ -67,6 +67,188 @@
             </div>
         </div>
 
+        <!-- User Interface Settings Card -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">User Interface Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="show_interface_progress" name="show_interface_progress"
+                                   {% if settings.show_interface_progress %}checked{% endif %}>
+                            <label class="form-check-label" for="show_interface_progress">
+                                <strong>Show Interface Collection Progress</strong>
+                            </label>
+                            <div class="form-text">Display detailed progress bar with real-time command execution status during interface collection</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-info">
+                        <i class="bi bi-display"></i> Update UI Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Credential Settings Card -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Default Credentials</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <div class="mb-3">
+                        <label for="default_credential_pool_id" class="form-label">Default Credential Pool</label>
+                        <select class="form-select" id="default_credential_pool_id" name="default_credential_pool_id">
+                            <option value="">-- No default pool --</option>
+                            {% for pool in available_credential_pools %}
+                            <option value="{{ pool.id }}"
+                                    {% if settings.default_credential_pool_id == pool.id %}selected{% endif %}>
+                                {{ pool.name }} ({{ pool.credentials|length }} credentials)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Default credential pool used when no specific credentials are assigned to a device.
+                            Credentials in the pool will be tried in priority order.
+                        </div>
+                    </div>
+
+                    {% if current_default_pool %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Current Default Pool:</strong> {{ current_default_pool.name }}
+                        <br>
+                        <small class="text-muted">
+                            Contains {{ current_default_pool.credentials|length }} credentials:
+                            {% for cred in current_default_pool.get_credentials_list()[:3] %}
+                                {{ cred.name }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                            {% if current_default_pool.credentials|length > 3 %}
+                                and {{ current_default_pool.credentials|length - 3 }} more
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-key"></i> Update Default Credentials
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Command Validation Settings Card -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Command Validation Rules</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Configure allowed and blocked commands for the Command Run Tool.
+                    Commands are validated using: 1) Block dangerous patterns, 2) Allow safe prefixes, 3) Allow standalone commands.
+                </div>
+
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs mb-3" id="commandRulesTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="safe-prefixes-tab" data-bs-toggle="tab" data-bs-target="#safe-prefixes" type="button" role="tab">
+                            <i class="bi bi-check-circle text-success"></i> Safe Prefixes
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dangerous-patterns-tab" data-bs-toggle="tab" data-bs-target="#dangerous-patterns" type="button" role="tab">
+                            <i class="bi bi-x-circle text-danger"></i> Dangerous Patterns
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="standalone-commands-tab" data-bs-toggle="tab" data-bs-target="#standalone-commands" type="button" role="tab">
+                            <i class="bi bi-terminal"></i> Standalone Commands
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab content -->
+                <div class="tab-content" id="commandRulesContent">
+                    <!-- Safe Prefixes Tab -->
+                    <div class="tab-pane fade show active" id="safe-prefixes" role="tabpanel">
+                        <p class="text-muted">Commands starting with these prefixes are allowed:</p>
+                        <div id="safePrefixesList" class="mb-3">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="newSafePrefix" placeholder="Add new safe prefix (e.g., 'show ')">
+                            <button class="btn btn-success" type="button" onclick="addSafePrefix()">
+                                <i class="bi bi-plus-circle"></i> Add
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dangerous Patterns Tab -->
+                    <div class="tab-pane fade" id="dangerous-patterns" role="tabpanel">
+                        <p class="text-muted">Commands containing these patterns are blocked:</p>
+                        <div id="dangerousPatternsList" class="mb-3">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="newDangerousPattern" placeholder="Add new dangerous pattern (e.g., 'delete')">
+                            <button class="btn btn-danger" type="button" onclick="addDangerousPattern()">
+                                <i class="bi bi-plus-circle"></i> Add
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Standalone Commands Tab -->
+                    <div class="tab-pane fade" id="standalone-commands" role="tabpanel">
+                        <p class="text-muted">These specific commands are allowed as standalone:</p>
+                        <div id="standaloneCommandsList" class="mb-3">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="newStandaloneCommand" placeholder="Add new standalone command (e.g., 'uptime')">
+                            <button class="btn btn-primary" type="button" onclick="addStandaloneCommand()">
+                                <i class="bi bi-plus-circle"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="mt-3">
+                    <button type="button" class="btn btn-success" onclick="saveCommandRules()">
+                        <i class="bi bi-save"></i> Save Rules
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="resetToDefaults()">
+                        <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
+                    </button>
+                    <button type="button" class="btn btn-info" onclick="exportRules()">
+                        <i class="bi bi-download"></i> Export Rules
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="document.getElementById('importRulesFile').click()">
+                        <i class="bi bi-upload"></i> Import Rules
+                    </button>
+                    <input type="file" id="importRulesFile" accept=".json" style="display: none;" onchange="importRules(event)">
+                </div>
+
+                <!-- Test Command Section -->
+                <div class="card mt-3 bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title">Test Command Validation</h6>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="testCommand" placeholder="Enter a command to test validation">
+                            <button class="btn btn-outline-secondary" type="button" onclick="testCommandValidation()">
+                                <i class="bi bi-play-circle"></i> Test
+                            </button>
+                        </div>
+                        <div id="testResult" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Password Complexity Settings Card -->
         <div class="card mt-3">
             <div class="card-header">
@@ -212,6 +394,382 @@
 </div>
 
 <script>
+// Global variables for command rules
+let commandRules = {
+    safePrefixes: [],
+    dangerousPatterns: [],
+    standaloneCommands: []
+};
+
+// Load command rules when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadCommandRules();
+});
+
+// Load command rules from server
+function loadCommandRules() {
+    fetch('/api/settings/command-rules')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                commandRules = data.rules;
+                updateCommandRulesDisplay();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading command rules:', error);
+            // Load default rules if server request fails
+            loadDefaultRules();
+        });
+}
+
+// Load default command rules
+function loadDefaultRules() {
+    commandRules = {
+        safePrefixes: [
+            'show ',
+            'execute ping ',
+            'execute traceroute ',
+            'ping ',
+            'traceroute ',
+            'trace ',
+            'get system ',
+            'diagnose '
+        ],
+        dangerousPatterns: [
+            'delete',
+            'remove',
+            'erase',
+            'format',
+            'reload',
+            'reboot',
+            'shutdown',
+            'clear',
+            'reset',
+            'write',
+            'copy',
+            'configure',
+            'config',
+            'exit',
+            'quit',
+            'end',
+            'commit',
+            'save'
+        ],
+        standaloneCommands: [
+            'uptime',
+            'version',
+            'date',
+            'clock',
+            'whoami',
+            'pwd'
+        ]
+    };
+    updateCommandRulesDisplay();
+}
+
+// Update the display of all command rules
+function updateCommandRulesDisplay() {
+    updateSafePrefixesDisplay();
+    updateDangerousPatternsDisplay();
+    updateStandaloneCommandsDisplay();
+}
+
+// Update safe prefixes display
+function updateSafePrefixesDisplay() {
+    const container = document.getElementById('safePrefixesList');
+    container.innerHTML = '';
+
+    commandRules.safePrefixes.forEach((prefix, index) => {
+        const item = document.createElement('div');
+        item.className = 'badge bg-success me-2 mb-2 d-inline-flex align-items-center';
+        item.innerHTML = `
+            <span class="me-2">${escapeHtml(prefix)}</span>
+            <button type="button" class="btn-close btn-close-white" onclick="removeSafePrefix(${index})"
+                    style="font-size: 0.7em;" aria-label="Remove"></button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// Update dangerous patterns display
+function updateDangerousPatternsDisplay() {
+    const container = document.getElementById('dangerousPatternsList');
+    container.innerHTML = '';
+
+    commandRules.dangerousPatterns.forEach((pattern, index) => {
+        const item = document.createElement('div');
+        item.className = 'badge bg-danger me-2 mb-2 d-inline-flex align-items-center';
+        item.innerHTML = `
+            <span class="me-2">${escapeHtml(pattern)}</span>
+            <button type="button" class="btn-close btn-close-white" onclick="removeDangerousPattern(${index})"
+                    style="font-size: 0.7em;" aria-label="Remove"></button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// Update standalone commands display
+function updateStandaloneCommandsDisplay() {
+    const container = document.getElementById('standaloneCommandsList');
+    container.innerHTML = '';
+
+    commandRules.standaloneCommands.forEach((command, index) => {
+        const item = document.createElement('div');
+        item.className = 'badge bg-primary me-2 mb-2 d-inline-flex align-items-center';
+        item.innerHTML = `
+            <span class="me-2">${escapeHtml(command)}</span>
+            <button type="button" class="btn-close btn-close-white" onclick="removeStandaloneCommand(${index})"
+                    style="font-size: 0.7em;" aria-label="Remove"></button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// Add new safe prefix
+function addSafePrefix() {
+    const input = document.getElementById('newSafePrefix');
+    const prefix = input.value.trim();
+
+    if (prefix && !commandRules.safePrefixes.includes(prefix)) {
+        commandRules.safePrefixes.push(prefix);
+        updateSafePrefixesDisplay();
+        input.value = '';
+    }
+}
+
+// Add new dangerous pattern
+function addDangerousPattern() {
+    const input = document.getElementById('newDangerousPattern');
+    const pattern = input.value.trim();
+
+    if (pattern && !commandRules.dangerousPatterns.includes(pattern)) {
+        commandRules.dangerousPatterns.push(pattern);
+        updateDangerousPatternsDisplay();
+        input.value = '';
+    }
+}
+
+// Add new standalone command
+function addStandaloneCommand() {
+    const input = document.getElementById('newStandaloneCommand');
+    const command = input.value.trim();
+
+    if (command && !commandRules.standaloneCommands.includes(command)) {
+        commandRules.standaloneCommands.push(command);
+        updateStandaloneCommandsDisplay();
+        input.value = '';
+    }
+}
+
+// Remove safe prefix
+function removeSafePrefix(index) {
+    commandRules.safePrefixes.splice(index, 1);
+    updateSafePrefixesDisplay();
+}
+
+// Remove dangerous pattern
+function removeDangerousPattern(index) {
+    commandRules.dangerousPatterns.splice(index, 1);
+    updateDangerousPatternsDisplay();
+}
+
+// Remove standalone command
+function removeStandaloneCommand(index) {
+    commandRules.standaloneCommands.splice(index, 1);
+    updateStandaloneCommandsDisplay();
+}
+
+// Save command rules to server
+function saveCommandRules() {
+    fetch('/api/settings/command-rules', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(commandRules)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Command rules saved successfully!');
+        } else {
+            showAlert('danger', 'Error saving command rules: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error saving command rules');
+        console.error('Error:', error);
+    });
+}
+
+// Reset to default rules
+function resetToDefaults() {
+    if (confirm('Are you sure you want to reset to default command rules? This will overwrite your current settings.')) {
+        loadDefaultRules();
+        showAlert('info', 'Command rules reset to defaults');
+    }
+}
+
+// Export rules as JSON
+function exportRules() {
+    const dataStr = JSON.stringify(commandRules, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = 'command-validation-rules.json';
+    link.click();
+
+    showAlert('success', 'Command rules exported successfully!');
+}
+
+// Import rules from JSON file
+function importRules(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedRules = JSON.parse(e.target.result);
+
+            // Validate imported data structure
+            if (importedRules.safePrefixes && Array.isArray(importedRules.safePrefixes) &&
+                importedRules.dangerousPatterns && Array.isArray(importedRules.dangerousPatterns) &&
+                importedRules.standaloneCommands && Array.isArray(importedRules.standaloneCommands)) {
+
+                commandRules = importedRules;
+                updateCommandRulesDisplay();
+                showAlert('success', 'Command rules imported successfully!');
+            } else {
+                showAlert('danger', 'Invalid file format. Please ensure the JSON file contains the correct structure.');
+            }
+        } catch (error) {
+            showAlert('danger', 'Error parsing JSON file: ' + error.message);
+        }
+    };
+    reader.readAsText(file);
+
+    // Reset file input
+    event.target.value = '';
+}
+
+// Test command validation
+function testCommandValidation() {
+    const command = document.getElementById('testCommand').value.trim();
+    const resultDiv = document.getElementById('testResult');
+
+    if (!command) {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Please enter a command to test</div>';
+        return;
+    }
+
+    const result = validateCommandSafety(command);
+
+    if (result.isValid) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> <strong>Command is SAFE</strong><br>
+                <small>${result.message}</small>
+            </div>
+        `;
+    } else {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle"></i> <strong>Command is BLOCKED</strong><br>
+                <small>${result.message}</small>
+            </div>
+        `;
+    }
+}
+
+// Client-side command validation function (matches server-side logic)
+function validateCommandSafety(command) {
+    const cleanCommand = command.trim().toLowerCase();
+
+    // Step 1: Check for dangerous patterns first (blocklist approach)
+    for (const pattern of commandRules.dangerousPatterns) {
+        if (cleanCommand.includes(pattern.toLowerCase())) {
+            return {
+                isValid: false,
+                message: `Contains dangerous pattern: "${pattern}"`
+            };
+        }
+    }
+
+    // Step 2: Check for safe prefixes (allowlist approach)
+    for (const prefix of commandRules.safePrefixes) {
+        if (cleanCommand.startsWith(prefix.toLowerCase())) {
+            return {
+                isValid: true,
+                message: `Matches safe prefix: "${prefix}"`
+            };
+        }
+    }
+
+    // Step 3: Check standalone commands
+    if (commandRules.standaloneCommands.some(cmd => cleanCommand === cmd.toLowerCase())) {
+        return {
+            isValid: true,
+            message: 'Allowed standalone command'
+        };
+    }
+
+    return {
+        isValid: false,
+        message: 'Command does not match any allowed patterns or commands'
+    };
+}
+
+// Utility function to escape HTML
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
+// Utility function to show alerts
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insert alert after the command validation card
+    const commandCard = document.querySelector('.card:has(#commandRulesTabs)');
+    commandCard.insertAdjacentElement('afterend', alertDiv);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Allow Enter key to add new items
+document.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        if (e.target.id === 'newSafePrefix') {
+            addSafePrefix();
+        } else if (e.target.id === 'newDangerousPattern') {
+            addDangerousPattern();
+        } else if (e.target.id === 'newStandaloneCommand') {
+            addStandaloneCommand();
+        } else if (e.target.id === 'testCommand') {
+            testCommandValidation();
+        }
+    }
+});
+
 function testTacacs() {
     fetch('{{ url_for("settings.test_tacacs") }}', {
         method: 'POST',

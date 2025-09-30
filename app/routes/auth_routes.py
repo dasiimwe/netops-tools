@@ -4,6 +4,7 @@ from app.routes import auth_bp
 from app.models import db, User, AuditLog
 from app.auth import authenticate_user, create_local_user, validate_password_strength
 from datetime import datetime
+from sqlalchemy import or_, desc, asc
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -114,9 +115,91 @@ def users():
     if not current_user.is_admin:
         flash('Admin access required', 'danger')
         return redirect(url_for('main.index'))
-    
-    all_users = User.query.all()
-    return render_template('auth/users.html', users=all_users)
+
+    # Get query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', 'username')
+    sort_order = request.args.get('sort_order', 'asc')
+    status_filter = request.args.get('status', '')
+    role_filter = request.args.get('role', '')
+    auth_type_filter = request.args.get('auth_type', '')
+
+    # Validate per_page limits
+    if per_page not in [5, 10, 25, 50, 100]:
+        per_page = 10
+
+    # Validate sort_by field
+    valid_sort_fields = ['username', 'email', 'auth_type', 'is_admin', 'is_active', 'created_at', 'last_login']
+    if sort_by not in valid_sort_fields:
+        sort_by = 'username'
+
+    # Validate sort_order
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'asc'
+
+    # Start building the query
+    query = User.query
+
+    # Apply search filter
+    if search:
+        search_filter = or_(
+            User.username.ilike(f'%{search}%'),
+            User.email.ilike(f'%{search}%')
+        )
+        query = query.filter(search_filter)
+
+    # Apply status filter
+    if status_filter == 'active':
+        query = query.filter(User.is_active == True)
+    elif status_filter == 'inactive':
+        query = query.filter(User.is_active == False)
+
+    # Apply role filter
+    if role_filter == 'admin':
+        query = query.filter(User.is_admin == True)
+    elif role_filter == 'user':
+        query = query.filter(User.is_admin == False)
+
+    # Apply auth type filter
+    if auth_type_filter in ['local', 'tacacs']:
+        query = query.filter(User.auth_type == auth_type_filter)
+
+    # Apply sorting
+    sort_column = getattr(User, sort_by)
+    if sort_order == 'desc':
+        query = query.order_by(desc(sort_column))
+    else:
+        query = query.order_by(asc(sort_column))
+
+    # Apply pagination
+    users_paginated = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    # Get statistics for all users (not just filtered)
+    total_users = User.query.count()
+    admin_users = User.query.filter_by(is_admin=True).count()
+    active_users = User.query.filter_by(is_active=True).count()
+    tacacs_users = User.query.filter_by(auth_type='tacacs').count()
+
+    return render_template('auth/users.html',
+                         users=users_paginated.items,
+                         pagination=users_paginated,
+                         search=search,
+                         sort_by=sort_by,
+                         sort_order=sort_order,
+                         status_filter=status_filter,
+                         role_filter=role_filter,
+                         auth_type_filter=auth_type_filter,
+                         per_page=per_page,
+                         total_users=total_users,
+                         admin_users=admin_users,
+                         active_users=active_users,
+                         tacacs_users=tacacs_users)
 
 @auth_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required

@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Credential Pool - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit Credential Pool: {{ pool.name }}</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Pool Details Card -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Pool Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('credential_pools.edit_pool', pool_id=pool.id) }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Pool Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ pool.name }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ pool.description or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_default" name="is_default"
+                                   {% if pool.is_default %}checked{% endif %}>
+                            <label class="form-check-label" for="is_default">
+                                <strong>Set as Default Pool</strong>
+                            </label>
+                            <div class="form-text">
+                                Default pool will be used when no specific credentials are assigned to a device
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Changes
+                    </button>
+                    <a href="{{ url_for('credential_pools.list_pools') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        <!-- Pool Members Card -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Pool Members</h5>
+                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                    <i class="bi bi-plus-circle"></i> Add Credential
+                </button>
+            </div>
+            <div class="card-body">
+                {% if pool_members %}
+                <div class="table-responsive">
+                    <table class="table table-striped" id="membersTable">
+                        <thead>
+                            <tr>
+                                <th width="50">Order</th>
+                                <th>Credential Name</th>
+                                <th>Username</th>
+                                <th>Type</th>
+                                <th width="150">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in pool_members %}
+                            <tr data-member-id="{{ member.id }}" data-order="{{ member.order }}">
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary" 
+                                                onclick="moveCredential({{ member.id }}, 'up')"
+                                                {% if loop.first %}disabled{% endif %}>
+                                            <i class="bi bi-arrow-up"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" 
+                                                onclick="moveCredential({{ member.id }}, 'down')"
+                                                {% if loop.last %}disabled{% endif %}>
+                                            <i class="bi bi-arrow-down"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>{{ member.credential.name }}</strong>
+                                    {% if loop.first %}
+                                    <span class="badge bg-primary ms-2">Primary</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ member.credential.username }}</td>
+                                <td>
+                                    <span class="badge bg-info">{{ member.credential.credential_type }}</span>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="removeMember({{ member.id }}, '{{ member.credential.name }}')">
+                                        <i class="bi bi-trash"></i> Remove
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No credentials in this pool.
+                    Click "Add Credential" to add credentials.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">Credential Priority</h5>
+                <p class="card-text">
+                    Credentials are tried in order from top to bottom when connecting to devices.
+                </p>
+                <ul>
+                    <li>The first (primary) credential is tried first</li>
+                    <li>If it fails, the next credential is attempted</li>
+                    <li>This continues until a successful connection</li>
+                    <li>Use the arrow buttons to adjust priority</li>
+                </ul>
+                
+                <hr>
+                
+                <h6>Pool Statistics</h6>
+                <ul class="list-unstyled">
+                    <li><strong>Total Members:</strong> {{ pool_members|length }}</li>
+                    <li><strong>Created:</strong> {{ pool.created_at.strftime('%Y-%m-%d') if pool.created_at else 'Unknown' }}</li>
+                    <li><strong>Last Modified:</strong> {{ pool.updated_at.strftime('%Y-%m-%d %H:%M') if pool.updated_at else 'Never' }}</li>
+                </ul>
+                
+                <div class="d-grid mt-3">
+                    <button type="button" class="btn btn-info" onclick="testPool()">
+                        <i class="bi bi-shield-check"></i> Test Pool Credentials
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="modal fade" id="addMemberModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Credential to Pool</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addMemberForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="credential_id" class="form-label">Select Credential</label>
+                        <select class="form-select" id="credential_id" name="credential_id" required>
+                            <option value="">-- Select a credential --</option>
+                            {% for cred in available_credentials %}
+                            <option value="{{ cred.id }}">
+                                {{ cred.name }} ({{ cred.username }} - {{ cred.credential_type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Only credentials not already in this pool are shown
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add to Pool
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Add member to pool
+document.getElementById('addMemberForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const credentialId = document.getElementById('credential_id').value;
+    if (!credentialId) {
+        alert('Please select a credential');
+        return;
+    }
+    
+    fetch('/credential-pools/{{ pool.id }}/members', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            credential_id: credentialId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error adding credential: ' + error);
+    });
+});
+
+// Remove member from pool
+function removeMember(memberId, credName) {
+    if (!confirm(`Remove credential "${credName}" from this pool?`)) {
+        return;
+    }
+
+    fetch(`/credential-pools/{{ pool.id }}/members/${memberId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error removing credential: ' + error);
+    });
+}
+
+// Move credential up or down
+function moveCredential(memberId, direction) {
+    fetch(`/credential-pools/{{ pool.id }}/members/${memberId}/reorder`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            direction: direction
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error reordering: ' + error);
+    });
+}
+
+// Test pool credentials
+function testPool() {
+    const resultsDiv = document.createElement('div');
+    resultsDiv.innerHTML = '<div class="text-center"><div class="spinner-border"></div> Testing credentials...</div>';
+    
+    // Create a simple modal for results
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Test Results</h5>
+                    <button type="button" class="btn-close" onclick="this.closest('.modal').remove()"></button>
+                </div>
+                <div class="modal-body" id="testResultsBody">
+                    ${resultsDiv.innerHTML}
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    fetch(`/credential-pools/api/{{ pool.id }}/test`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultsBody = document.getElementById('testResultsBody');
+        if (data.success) {
+            let html = '<table class="table table-sm"><thead><tr><th>Order</th><th>Credential</th><th>Status</th></tr></thead><tbody>';
+            data.results.forEach(result => {
+                const statusClass = result.status === 'success' ? 'success' : 'danger';
+                html += `<tr>
+                    <td>${result.order}</td>
+                    <td>${result.credential_name} (${result.username})</td>
+                    <td><span class="badge bg-${statusClass}">${result.status}</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            resultsBody.innerHTML = html;
+        } else {
+            resultsBody.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        document.getElementById('testResultsBody').innerHTML = `<div class="alert alert-danger">Error: ${error}</div>`;
+    });
+}
+</script>
+{% endblock %}

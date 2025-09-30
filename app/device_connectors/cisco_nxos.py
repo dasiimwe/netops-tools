@@ -53,7 +53,7 @@ class CiscoNXOSConnector(BaseConnector):
             # Continue anyway, as some commands might still work
             return True
 
-    def get_interfaces(self) -> List[Dict]:
+    def get_interfaces(self, progress_callback=None) -> List[Dict]:
         """Get interface information from NXOS device with enhanced error handling"""
         session_start_time = datetime.now()
         self._log_session_event('interface_collection_start')
@@ -90,7 +90,7 @@ class CiscoNXOSConnector(BaseConnector):
 
             # Parse the interface data
             parse_start_time = datetime.now()
-            interfaces = self.parse_interfaces(command_outputs)
+            interfaces = self.parse_interfaces(command_outputs, progress_callback)
 
             # Filter interfaces with IP addresses
             interfaces_with_ip = [
@@ -126,11 +126,11 @@ class CiscoNXOSConnector(BaseConnector):
     def get_interface_commands(self) -> List[str]:
         return [
             'show interface description',
-            'show ip interface brief',
+            'show ip interface brief vrf all',
             'show ipv6 interface brief'
         ]
     
-    def parse_interfaces(self, command_outputs: Dict[str, str]) -> List[Dict]:
+    def parse_interfaces(self, command_outputs: Dict[str, str], progress_callback=None) -> List[Dict]:
         interfaces = {}
         
         # Parse interface descriptions
@@ -157,23 +157,29 @@ class CiscoNXOSConnector(BaseConnector):
                 }
         
         # Parse IPv4 addresses
-        ipv4_output = command_outputs.get('show ip interface brief', '')
-        ipv4_pattern = r'^(\S+)\s+([\d.]+|unassigned|--)\s+\S+\s+\S+\s+(\S+)\s+(\S+)'
-        
+        ipv4_output = command_outputs.get('show ip interface brief vrf all', '')
+
+        # NXOS 'show ip interface brief vrf all' has different format than regular IOS
+        # Format: interface_name   ip_address   combined_status
+        ipv4_pattern = r'^(\S+)\s+([\d.]+|unassigned|--)\s+(.+)$'
+
         for line in ipv4_output.split('\n'):
-            match = re.match(ipv4_pattern, line.strip())
+            line = line.strip()
+            if not line or line.startswith('IP Interface Status') or line.startswith('Interface'):
+                continue
+
+            match = re.match(ipv4_pattern, line)
             if match:
                 intf_name = match.group(1)
                 ip_address = match.group(2)
-                status = match.group(3)
-                protocol = match.group(4)
-                
+                combined_status = match.group(3).strip()
+
                 if ip_address not in ['unassigned', '--'] and '.' in ip_address:
                     if intf_name not in interfaces:
                         interfaces[intf_name] = {
                             'name': intf_name,
                             'description': '',
-                            'status': f"{status}/{protocol}"
+                            'status': combined_status
                         }
                     interfaces[intf_name]['ipv4_address'] = ip_address
         
@@ -209,34 +215,92 @@ class CiscoNXOSConnector(BaseConnector):
                             interfaces[current_interface]['ipv6_address'] = ipv6_addr
 
         # Get running-config descriptions for each interface
-        self._update_interface_descriptions_from_config(interfaces)
+        self._update_interface_descriptions_from_config(interfaces, progress_callback)
 
         return list(interfaces.values())
 
-    def _update_interface_descriptions_from_config(self, interfaces: Dict[str, Dict]):
+    def _update_interface_descriptions_from_config(self, interfaces: Dict[str, Dict], progress_callback=None):
         """Update interface descriptions by querying running-config for each interface"""
         if not self.connection:
             logger.warning("No connection available to get running-config descriptions")
             return
 
-        for intf_name, intf_data in interfaces.items():
+        total_interfaces = len(interfaces)
+        for idx, (intf_name, intf_data) in enumerate(interfaces.items()):
             try:
-                # Execute show running-config interface command
-                command = f"show running-config interface {intf_name}"
-                self._log_session_event('command_sent', command=command)
+                # Skip if we already have a good description from 'show interface description'
+                existing_desc = intf_data.get('description', '').strip()
+                if existing_desc and existing_desc not in ['', '--', 'N/A']:
+                    logger.debug(f"Interface {intf_name} already has description: {existing_desc}")
+                    continue
 
-                output = self.connection.send_command(command, strip_prompt=False, strip_command=False)
+                # For management interfaces on NXOS, try different command formats
+                if intf_name.lower().startswith('mgmt'):
+                    # Management interfaces might need different handling
+                    commands_to_try = [
+                        f"show running-config interface {intf_name}",
+                        f"show running-config | section interface {intf_name}",
+                        f"show interface {intf_name}"
+                    ]
+                else:
+                    commands_to_try = [f"show running-config interface {intf_name}"]
 
-                self._log_session_event('command_received',
-                                      command=command,
-                                      output=output,
-                                      output_length=len(output))
+                config_description = None
+                for command in commands_to_try:
+                    try:
+                        # Update progress if callback provided
+                        if progress_callback:
+                            progress_callback({
+                                'command': command,
+                                'status': 'executing',
+                                'interface': intf_name,
+                                'progress': f"Interface {idx + 1}/{total_interfaces}"
+                            })
 
-                # Parse description from running config
-                config_description = self._parse_description_from_config(output)
-                if config_description:
-                    intf_data['description'] = config_description
-                    logger.debug(f"Updated description for {intf_name}: {config_description}")
+                        self._log_session_event('command_sent', command=command)
+
+                        # Use execute_command method which has better error handling
+                        output = self.execute_command(command)
+
+                        self._log_session_event('command_received',
+                                              command=command,
+                                              output=output,
+                                              output_length=len(output))
+
+                        # Update progress on success
+                        if progress_callback:
+                            progress_callback({
+                                'command': command,
+                                'status': 'completed',
+                                'interface': intf_name,
+                                'output_length': len(output),
+                                'progress': f"Interface {idx + 1}/{total_interfaces}"
+                            })
+
+                        # Parse description from running config
+                        config_description = self._parse_description_from_config(output)
+                        if config_description:
+                            intf_data['description'] = config_description
+                            logger.debug(f"Updated description for {intf_name} using '{command}': {config_description}")
+                            break  # Success, stop trying other commands
+                        else:
+                            logger.debug(f"No description found in output from '{command}' for {intf_name}")
+
+                    except Exception as e:
+                        logger.debug(f"Command '{command}' failed for interface {intf_name}: {e}")
+                        # Update progress on failure
+                        if progress_callback:
+                            progress_callback({
+                                'command': command,
+                                'status': 'failed',
+                                'interface': intf_name,
+                                'error': str(e),
+                                'progress': f"Interface {idx + 1}/{total_interfaces}"
+                            })
+                        continue  # Try next command
+
+                if not config_description:
+                    logger.debug(f"No config description found for interface {intf_name}, keeping original: {existing_desc}")
 
             except Exception as e:
                 logger.warning(f"Failed to get running-config for interface {intf_name}: {e}")
@@ -245,11 +309,27 @@ class CiscoNXOSConnector(BaseConnector):
 
     def _parse_description_from_config(self, config_output: str) -> str:
         """Parse interface description from running-config output"""
-        description_pattern = r'^\s*description\s+(.+)$'
+        if not config_output or config_output.strip() == '':
+            return ""
+
+        # Try multiple patterns to handle different command outputs
+        patterns = [
+            r'^\s*description\s+(.+)$',  # Standard description line
+            r'^\s*Description:\s*(.+)$',  # From show interface output
+            r'^\s*Description\s*:\s*(.+)$'  # Alternative format
+        ]
 
         for line in config_output.split('\n'):
-            match = re.match(description_pattern, line, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
+            line = line.strip()
+            if not line:
+                continue
+
+            for pattern in patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    desc = match.group(1).strip()
+                    # Filter out common "no description" indicators
+                    if desc and desc.lower() not in ['--', 'n/a', 'none', 'not set', '']:
+                        return desc
 
         return ""

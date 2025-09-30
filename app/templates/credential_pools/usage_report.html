@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Credential Usage Report - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Credential Usage Report</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('credential_pools.list_pools') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Pools
+        </a>
+    </div>
+</div>
+
+<!-- Statistics Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Total Devices</h5>
+                <h2 class="text-primary">{{ stats.total_devices }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Specific Assignments</h5>
+                <h2 class="text-success">{{ stats.devices_with_specific_assignment }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Using Default</h5>
+                <h2 class="text-info">{{ stats.devices_using_default }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Credential Pools</h5>
+                <h2 class="text-warning">{{ stats.total_credential_pools }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Default Settings Alert -->
+{% if stats.default_pool or stats.default_credential %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>Default Settings:</strong>
+    {% if stats.default_pool %}
+        Default Pool: <strong>{{ stats.default_pool.name }}</strong> ({{ stats.default_pool.credentials|length }} credentials)
+    {% elif stats.default_credential %}
+        Default Credential: <strong>{{ stats.default_credential.name }}</strong>
+    {% endif %}
+    - Used by {{ stats.devices_using_default }} device(s) without specific assignments
+</div>
+{% endif %}
+
+<div class="row">
+    <!-- Credential Pool Usage -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Credential Pool Usage</h5>
+            </div>
+            <div class="card-body">
+                {% if pool_usage %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Pool Name</th>
+                                <th>Credentials</th>
+                                <th>Assigned Devices</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usage in pool_usage %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('credential_pools.edit_pool', pool_id=usage.pool.id) }}">
+                                        {{ usage.pool.name }}
+                                    </a>
+                                    {% if usage.is_default %}
+                                    <span class="badge bg-primary ms-1">Default</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ usage.pool.credentials|length }}</span>
+                                </td>
+                                <td>
+                                    {% if usage.assigned_devices %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            onclick="showDevices('{{ usage.pool.name }}', {{ usage.assigned_devices|map(attribute='hostname')|list|tojson }})">
+                                        {{ usage.assignment_count }} device(s)
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">No direct assignments</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if usage.assignment_count > 0 %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Unused</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No credential pools configured.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Individual Credential Usage -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Individual Credential Usage</h5>
+            </div>
+            <div class="card-body">
+                {% if credential_usage %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Credential Name</th>
+                                <th>Direct</th>
+                                <th>Via Pools</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usage in credential_usage %}
+                            <tr>
+                                <td>
+                                    {{ usage.credential.name }}
+                                    {% if usage.is_default %}
+                                    <span class="badge bg-primary ms-1">Default</span>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">{{ usage.credential.username }}</small>
+                                </td>
+                                <td>
+                                    {% if usage.directly_assigned_devices %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary"
+                                            onclick="showDevices('{{ usage.credential.name }} (Direct)', {{ usage.directly_assigned_devices|map(attribute='hostname')|list|tojson }})">
+                                        {{ usage.direct_assignment_count }}
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if usage.indirectly_assigned_devices %}
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                            onclick="showDevices('{{ usage.credential.name }} (Via Pools)', {{ usage.indirectly_assigned_devices|map(attribute='hostname')|list|tojson }})">
+                                        {{ usage.indirect_assignment_count }}
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if usage.direct_assignment_count > 0 or usage.indirect_assignment_count > 0 %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Unused</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No credentials configured.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Devices Without Specific Assignment -->
+{% if devices_without_assignment %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Devices Using Default Credentials ({{ devices_without_assignment|length }})</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for device in devices_without_assignment %}
+            <div class="col-md-3 mb-2">
+                <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-sm btn-outline-secondary w-100">
+                    {{ device.hostname }}
+                    <br>
+                    <small class="text-muted">{{ device.ip_address }}</small>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Device List Modal -->
+<div class="modal fade" id="deviceListModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deviceListModalLabel">Devices</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul id="deviceList" class="list-group"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showDevices(title, devices) {
+    document.getElementById('deviceListModalLabel').textContent = title + ' - ' + devices.length + ' device(s)';
+
+    const deviceList = document.getElementById('deviceList');
+    deviceList.innerHTML = '';
+
+    devices.forEach(function(hostname) {
+        const listItem = document.createElement('li');
+        listItem.className = 'list-group-item';
+        listItem.textContent = hostname;
+        deviceList.appendChild(listItem);
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('deviceListModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

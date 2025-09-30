@@ -129,6 +129,20 @@
             cursor: pointer;
             padding: 2px 6px;
         }
+        .command-input-valid {
+            border: 2px solid #28a745 !important;
+            background-color: #f8fff8 !important;
+        }
+        .command-input-invalid {
+            border: 2px solid #dc3545 !important;
+            background-color: #fff5f5 !important;
+        }
+        .command-help-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+            line-height: 1.2;
+        }
     </style>
 </head>
 <body>
@@ -204,8 +218,12 @@
                     </div>
                 </div>
                 <div class="add-item">
-                    <input type="text" id="commandInput" placeholder="Enter command" style="width: 200px;">
+                    <input type="text" id="commandInput" placeholder="Enter safe command (e.g., show version)" style="width: 200px;">
                     <button onclick="addCommand()">Add Command</button>
+                    <div class="command-help-text">
+                        ✅ Allowed: show, ping, trace, debug (read-only)<br>
+                        ❌ Blocked: configure, set, write, delete, reboot
+                    </div>
                 </div>
                 <div id="commandList" class="command-list">
                     <em>No commands added...</em>
@@ -513,6 +531,13 @@
         let commands = [];
         let commandResults = {};
 
+        // Command validation rules (loaded from database)
+        let commandRules = {
+            safePrefixes: [],
+            dangerousPatterns: [],
+            standaloneCommands: []
+        };
+
         // Tab switching function
         function showTab(tabName) {
             // Hide all tab contents
@@ -528,6 +553,102 @@
 
             // Add active class to clicked tab
             event.target.classList.add('active');
+        }
+
+        // Load command validation rules from server
+        function loadCommandRules() {
+            fetch('/api/settings/command-rules')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        commandRules = data.rules;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading command rules:', error);
+                    // Use default rules if server request fails
+                    commandRules = {
+                        safePrefixes: [
+                            'show ',
+                            'execute ping ',
+                            'execute traceroute ',
+                            'ping ',
+                            'traceroute ',
+                            'trace ',
+                            'get system ',
+                            'diagnose '
+                        ],
+                        dangerousPatterns: [
+                            'delete',
+                            'remove',
+                            'erase',
+                            'format',
+                            'reload',
+                            'reboot',
+                            'shutdown',
+                            'clear',
+                            'reset',
+                            'write',
+                            'copy',
+                            'configure',
+                            'config',
+                            'exit',
+                            'quit',
+                            'end',
+                            'commit',
+                            'save'
+                        ],
+                        standaloneCommands: [
+                            'uptime',
+                            'version',
+                            'date',
+                            'clock',
+                            'whoami',
+                            'pwd'
+                        ]
+                    };
+                });
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCommandRules();
+        });
+
+        // Command safety validation function (client-side) - uses database rules
+        function validateCommandSafety(command) {
+            if (!command || typeof command !== 'string') {
+                return { isValid: false, message: "Invalid command format" };
+            }
+
+            const cleanCommand = command.trim().toLowerCase();
+
+            // Step 1: Check for dangerous patterns first (blocklist approach)
+            for (const pattern of commandRules.dangerousPatterns) {
+                if (cleanCommand.includes(pattern.toLowerCase())) {
+                    return {
+                        isValid: false,
+                        message: `Dangerous command pattern detected: '${pattern}'. Only read-only troubleshooting commands are allowed.`
+                    };
+                }
+            }
+
+            // Step 2: Check for safe prefixes (allowlist approach)
+            for (const prefix of commandRules.safePrefixes) {
+                if (cleanCommand.startsWith(prefix.toLowerCase())) {
+                    return { isValid: true, message: null };
+                }
+            }
+
+            // Step 3: Check standalone commands
+            if (commandRules.standaloneCommands.some(cmd => cleanCommand === cmd.toLowerCase())) {
+                return { isValid: true, message: null };
+            }
+
+            return {
+                isValid: false,
+                message: `Command '${command}' is not in the list of allowed safe commands. Use the Settings page to manage allowed commands.`
+            };
         }
 
         // Command runner functions
@@ -546,9 +667,36 @@
             const commandInput = document.getElementById('commandInput');
             const command = commandInput.value.trim();
 
-            if (command && !commands.includes(command)) {
+            if (!command) {
+                return;
+            }
+
+            // Validate command safety
+            const validation = validateCommandSafety(command);
+            if (!validation.isValid) {
+                alert(`❌ Command Blocked\n\n${validation.message}\n\nOnly safe, read-only troubleshooting commands are allowed.`);
+                commandInput.value = '';
+                commandInput.focus();
+                return;
+            }
+
+            if (!commands.includes(command)) {
                 commands.push(command);
                 updateCommandList();
+                commandInput.value = '';
+                // Visual feedback for successful addition
+                const addButton = event.target;
+                const originalText = addButton.textContent;
+                addButton.textContent = '✓ Added';
+                addButton.style.backgroundColor = '#28a745';
+                addButton.style.color = 'white';
+                setTimeout(() => {
+                    addButton.textContent = originalText;
+                    addButton.style.backgroundColor = '';
+                    addButton.style.color = '';
+                }, 1000);
+            } else {
+                alert('Command already exists in the list');
                 commandInput.value = '';
             }
         }
@@ -601,6 +749,28 @@
 
             if (commands.length === 0) {
                 alert('Please add at least one command');
+                return;
+            }
+
+            // Final safety check - validate all commands before execution
+            const invalidCommands = [];
+            for (const command of commands) {
+                const validation = validateCommandSafety(command);
+                if (!validation.isValid) {
+                    invalidCommands.push({
+                        command: command,
+                        reason: validation.message
+                    });
+                }
+            }
+
+            if (invalidCommands.length > 0) {
+                let errorMessage = `🚫 Execution Blocked - Unsafe Commands Detected\n\n`;
+                invalidCommands.forEach(item => {
+                    errorMessage += `• "${item.command}"\n  Reason: ${item.reason}\n\n`;
+                });
+                errorMessage += `Please remove these commands and try again.`;
+                alert(errorMessage);
                 return;
             }
 
@@ -741,6 +911,40 @@
         document.getElementById('commandInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 addCommand();
+            }
+        });
+
+        // Add real-time command validation
+        document.getElementById('commandInput').addEventListener('input', function(e) {
+            const command = e.target.value.trim();
+            const addButton = document.querySelector('button[onclick="addCommand()"]');
+
+            // Remove existing validation classes
+            e.target.classList.remove('command-input-valid', 'command-input-invalid');
+
+            if (command) {
+                const validation = validateCommandSafety(command);
+                if (!validation.isValid) {
+                    // Show visual feedback for invalid command
+                    e.target.classList.add('command-input-invalid');
+                    e.target.title = validation.message;
+                    addButton.disabled = true;
+                    addButton.style.opacity = '0.6';
+                    addButton.title = 'Command not allowed - ' + validation.message;
+                } else {
+                    // Command is valid
+                    e.target.classList.add('command-input-valid');
+                    e.target.title = 'Valid command - ready to add';
+                    addButton.disabled = false;
+                    addButton.style.opacity = '1';
+                    addButton.title = 'Add this command';
+                }
+            } else {
+                // Reset to default state when empty
+                e.target.title = '';
+                addButton.disabled = false;
+                addButton.style.opacity = '1';
+                addButton.title = '';
             }
         });
 
@@ -923,10 +1127,46 @@
                 }
             }
 
-            commands = [...commandList];
+            // Validate all commands being loaded
+            const validCommands = [];
+            const invalidCommands = [];
+
+            for (const command of commandList) {
+                const validation = validateCommandSafety(command);
+                if (validation.isValid) {
+                    validCommands.push(command);
+                } else {
+                    invalidCommands.push({
+                        command: command,
+                        reason: validation.message
+                    });
+                }
+            }
+
+            if (invalidCommands.length > 0) {
+                let warningMessage = `⚠️ Security Warning\n\n${invalidCommands.length} unsafe command(s) were blocked from loading:\n\n`;
+                invalidCommands.forEach(item => {
+                    warningMessage += `• "${item.command}"\n  Reason: ${item.reason}\n\n`;
+                });
+
+                if (validCommands.length > 0) {
+                    warningMessage += `${validCommands.length} safe command(s) will be loaded.`;
+                } else {
+                    warningMessage += `No safe commands found in this list.`;
+                }
+
+                alert(warningMessage);
+            }
+
+            commands = validCommands;
             updateCommandList();
             closeLoadCommandModal();
-            alert(`Command list "${listName}" loaded successfully!`);
+
+            if (validCommands.length > 0) {
+                alert(`Command list "${listName}" loaded with ${validCommands.length} safe command(s)!`);
+            } else {
+                alert(`Command list "${listName}" contained no safe commands.`);
+            }
         }
 
         function deleteCommandList(listName) {

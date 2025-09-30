@@ -1,7 +1,7 @@
 from flask import render_template, redirect, url_for, request, jsonify, send_file, current_app, Response, stream_with_context
 from flask_login import login_required, current_user
 from app.routes import main_bp
-from app.models import db, Device, Interface, User, AuditLog
+from app.models import db, Device, Interface, User, AuditLog, Settings
 from sqlalchemy import func, or_
 from datetime import datetime, timedelta
 import re
@@ -139,6 +139,86 @@ def translate_ip():
     translated_text = translated_text.replace('\n', '<br>')
 
     return jsonify({'translated_text': translated_text})
+
+def validate_command_safety(command):
+    """
+    Validate that a command is safe for execution (non-intrusive troubleshooting only).
+    Returns (is_safe, error_message)
+    """
+    if not command or not isinstance(command, str):
+        return False, "Invalid command format"
+
+    command = command.strip().lower()
+
+    # Load command rules from database or use defaults
+    try:
+        rules_json = Settings.get_value('command_validation_rules', None)
+        if rules_json:
+            rules = json.loads(rules_json)
+            safe_prefixes = [prefix.lower() for prefix in rules.get('safePrefixes', [])]
+            dangerous_patterns = [pattern.lower() for pattern in rules.get('dangerousPatterns', [])]
+            standalone_commands = [cmd.lower() for cmd in rules.get('standaloneCommands', [])]
+        else:
+            # Use default rules if none are configured
+            safe_prefixes = [
+                'show ',
+                'execute ping ',
+                'execute traceroute ',
+                'ping ',
+                'traceroute ',
+                'trace ',
+                'get system ',
+                'diagnose '
+            ]
+            dangerous_patterns = [
+                'delete',
+                'remove',
+                'erase',
+                'format',
+                'reload',
+                'reboot',
+                'shutdown',
+                'clear',
+                'reset',
+                'write',
+                'copy',
+                'configure',
+                'config',
+                'exit',
+                'quit',
+                'end',
+                'commit',
+                'save'
+            ]
+            standalone_commands = [
+                'uptime',
+                'version',
+                'date',
+                'clock',
+                'whoami',
+                'pwd'
+            ]
+    except Exception as e:
+        # Fall back to basic safe defaults if there's an error
+        safe_prefixes = ['show ']
+        dangerous_patterns = ['configure', 'config', 'delete', 'remove', 'write', 'copy']
+        standalone_commands = ['uptime', 'version']
+
+    # Step 1: Check for dangerous patterns first (blocklist approach)
+    for pattern in dangerous_patterns:
+        if pattern in command:
+            return False, f"Dangerous command pattern detected: '{pattern}'. Only read-only troubleshooting commands are allowed."
+
+    # Step 2: Check for safe prefixes (allowlist approach)
+    for prefix in safe_prefixes:
+        if command.startswith(prefix):
+            return True, None
+
+    # Step 3: Check standalone commands
+    if command in standalone_commands:
+        return True, None
+
+    return False, f"Command '{command}' is not in the list of allowed safe commands. Use the Settings page to manage allowed commands."
 
 def get_device_connector(device_ip, username, password):
     """Get appropriate device connector based on device type detection"""
@@ -299,6 +379,35 @@ def run_commands():
                 'success': False,
                 'error': 'Missing required parameters'
             })
+
+        # Validate command safety
+        for command in commands:
+            is_safe, error_message = validate_command_safety(command)
+            if not is_safe:
+                # Log blocked command attempt
+                audit_log = AuditLog(
+                    user_id=current_user.id if current_user.is_authenticated else None,
+                    action='command_execution_blocked',
+                    details=f'Blocked unsafe command: "{command}" - {error_message}',
+                    ip_address=request.remote_addr
+                )
+                db.session.add(audit_log)
+                db.session.commit()
+
+                return jsonify({
+                    'success': False,
+                    'error': f'Unsafe command rejected: {error_message}'
+                })
+
+        # Log successful command execution attempt
+        audit_log = AuditLog(
+            user_id=current_user.id if current_user.is_authenticated else None,
+            action='command_execution_started',
+            details=f'Starting command execution on {len(devices)} device(s): {", ".join(commands)}',
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
 
         # For testing, let's return sample data if device is 'test'
         if 'test' in devices:

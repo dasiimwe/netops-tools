@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    
+    <h1 class="h2">User Management</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
             <a href="{{ url_for('auth.register') }}" class="btn btn-sm btn-primary">
@@ -14,17 +14,132 @@
     </div>
 </div>
 
+<!-- Search and Filters -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" id="filterForm">
+            <div class="row g-3">
+                <!-- Search -->
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Search</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="search" name="search"
+                               value="{{ search }}" placeholder="Search username or email...">
+                        <button class="btn btn-outline-secondary" type="submit" id="searchBtn">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="col-md-2">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status" onchange="submitForm()">
+                        <option value="">All Status</option>
+                        <option value="active" {{ 'selected' if status_filter == 'active' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if status_filter == 'inactive' }}>Inactive</option>
+                    </select>
+                </div>
+
+                <!-- Role Filter -->
+                <div class="col-md-2">
+                    <label for="role" class="form-label">Role</label>
+                    <select class="form-select" id="role" name="role" onchange="submitForm()">
+                        <option value="">All Roles</option>
+                        <option value="admin" {{ 'selected' if role_filter == 'admin' }}>Admin</option>
+                        <option value="user" {{ 'selected' if role_filter == 'user' }}>User</option>
+                    </select>
+                </div>
+
+                <!-- Auth Type Filter -->
+                <div class="col-md-2">
+                    <label for="auth_type" class="form-label">Auth Type</label>
+                    <select class="form-select" id="auth_type" name="auth_type" onchange="submitForm()">
+                        <option value="">All Types</option>
+                        <option value="local" {{ 'selected' if auth_type_filter == 'local' }}>Local</option>
+                        <option value="tacacs" {{ 'selected' if auth_type_filter == 'tacacs' }}>TACACS+</option>
+                    </select>
+                </div>
+
+                <!-- Per Page -->
+                <div class="col-md-2">
+                    <label for="per_page" class="form-label">Show</label>
+                    <select class="form-select" id="per_page" name="per_page" onchange="submitForm()">
+                        <option value="5" {{ 'selected' if per_page == 5 }}>5</option>
+                        <option value="10" {{ 'selected' if per_page == 10 }}>10</option>
+                        <option value="25" {{ 'selected' if per_page == 25 }}>25</option>
+                        <option value="50" {{ 'selected' if per_page == 50 }}>50</option>
+                        <option value="100" {{ 'selected' if per_page == 100 }}>100</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Hidden fields for maintaining state -->
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+            <input type="hidden" name="sort_order" value="{{ sort_order }}">
+            <input type="hidden" name="page" value="1">
+
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">
+                        <i class="bi bi-x-circle"></i> Clear Filters
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Info -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <small class="text-muted">
+            Showing {{ pagination.items|length }} of {{ pagination.total }} users
+            {% if search or status_filter or role_filter or auth_type_filter %}
+            (filtered)
+            {% endif %}
+        </small>
+    </div>
+    <div>
+        <small class="text-muted">
+            Page {{ pagination.page }} of {{ pagination.pages }}
+        </small>
+    </div>
+</div>
+
+<!-- Users Table -->
 <div class="table-responsive">
     <table class="table table-striped table-hover">
         <thead>
             <tr>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Auth Type</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Last Login</th>
+                <th class="sortable" data-sort="username">
+                    Username
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'username' and sort_order == 'asc' else 'down' if sort_by == 'username' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="email">
+                    Email
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'email' and sort_order == 'asc' else 'down' if sort_by == 'email' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="auth_type">
+                    Auth Type
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'auth_type' and sort_order == 'asc' else 'down' if sort_by == 'auth_type' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="is_admin">
+                    Role
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'is_admin' and sort_order == 'asc' else 'down' if sort_by == 'is_admin' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="is_active">
+                    Status
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'is_active' and sort_order == 'asc' else 'down' if sort_by == 'is_active' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="created_at">
+                    Created
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'created_at' and sort_order == 'asc' else 'down' if sort_by == 'created_at' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
+                <th class="sortable" data-sort="last_login">
+                    Last Login
+                    <i class="bi bi-chevron-{{ 'up' if sort_by == 'last_login' and sort_order == 'asc' else 'down' if sort_by == 'last_login' and sort_order == 'desc' else 'expand' }}"></i>
+                </th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -59,25 +174,25 @@
                 <td>{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ url_for('auth.edit_user', user_id=user.id) }}" 
+                        <a href="{{ url_for('auth.edit_user', user_id=user.id) }}"
                            class="btn btn-outline-primary" title="Edit User">
                             <i class="bi bi-pencil"></i>
                         </a>
-                        
+
                         {% if user.id != current_user.id %}
-                        <form method="POST" action="{{ url_for('auth.toggle_user_status', user_id=user.id) }}" 
+                        <form method="POST" action="{{ url_for('auth.toggle_user_status', user_id=user.id) }}"
                               style="display: inline;">
-                            <button type="submit" 
-                                    class="btn btn-outline-{% if user.is_active %}warning{% else %}success{% endif %}" 
+                            <button type="submit"
+                                    class="btn btn-outline-{% if user.is_active %}warning{% else %}success{% endif %}"
                                     title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %} User"
                                     onclick="return confirm('Are you sure you want to {% if user.is_active %}deactivate{% else %}activate{% endif %} this user?');">
                                 <i class="bi bi-{% if user.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
-                        
-                        {% if not (user.is_admin and users|selectattr('is_admin')|list|length <= 1) %}
-                        <form method="POST" action="{{ url_for('auth.delete_user', user_id=user.id) }}" 
-                              style="display: inline;" 
+
+                        {% if not (user.is_admin and admin_users <= 1) %}
+                        <form method="POST" action="{{ url_for('auth.delete_user', user_id=user.id) }}"
+                              style="display: inline;"
                               onsubmit="return confirm('Are you sure you want to delete user {{ user.username }}? This action cannot be undone.');">
                             <button type="submit" class="btn btn-outline-danger" title="Delete User">
                                 <i class="bi bi-trash"></i>
@@ -90,8 +205,14 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="8" class="text-center text-muted">
+                <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-people h1 d-block text-muted mb-2"></i>
+                    {% if search or status_filter or role_filter or auth_type_filter %}
+                    No users found matching your filters.
+                    <br><small>Try adjusting your search criteria or clearing filters.</small>
+                    {% else %}
                     No users found.
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -99,7 +220,78 @@
     </table>
 </div>
 
-<div class="mt-3">
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<nav aria-label="User pagination">
+    <ul class="pagination justify-content-center">
+        <!-- First page -->
+        {% if pagination.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('auth.users', page=1, search=search, sort_by=sort_by, sort_order=sort_order, status=status_filter, role=role_filter, auth_type=auth_type_filter, per_page=per_page) }}">
+                <i class="bi bi-chevron-double-left"></i>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('auth.users', page=pagination.prev_num, search=search, sort_by=sort_by, sort_order=sort_order, status=status_filter, role=role_filter, auth_type=auth_type_filter, per_page=per_page) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+        </li>
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+        </li>
+        {% endif %}
+
+        <!-- Page numbers -->
+        {% for page_num in pagination.iter_pages() %}
+        {% if page_num %}
+        {% if page_num != pagination.page %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('auth.users', page=page_num, search=search, sort_by=sort_by, sort_order=sort_order, status=status_filter, role=role_filter, auth_type=auth_type_filter, per_page=per_page) }}">
+                {{ page_num }}
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item active">
+            <span class="page-link">{{ page_num }}</span>
+        </li>
+        {% endif %}
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link">…</span>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        <!-- Last page -->
+        {% if pagination.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('auth.users', page=pagination.next_num, search=search, sort_by=sort_by, sort_order=sort_order, status=status_filter, role=role_filter, auth_type=auth_type_filter, per_page=per_page) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('auth.users', page=pagination.pages, search=search, sort_by=sort_by, sort_order=sort_order, status=status_filter, role=role_filter, auth_type=auth_type_filter, per_page=per_page) }}">
+                <i class="bi bi-chevron-double-right"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+        </li>
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Statistics Cards -->
+<div class="mt-4">
     <div class="row">
         <div class="col-md-6">
             <div class="card">
@@ -110,13 +302,13 @@
                     <div class="row">
                         <div class="col-6">
                             <div class="text-center">
-                                <div class="h3 text-primary">{{ users|length }}</div>
+                                <div class="h3 text-primary">{{ total_users }}</div>
                                 <div class="small text-muted">Total Users</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="text-center">
-                                <div class="h3 text-warning">{{ users|selectattr('is_admin')|list|length }}</div>
+                                <div class="h3 text-warning">{{ admin_users }}</div>
                                 <div class="small text-muted">Admin Users</div>
                             </div>
                         </div>
@@ -125,13 +317,13 @@
                     <div class="row">
                         <div class="col-6">
                             <div class="text-center">
-                                <div class="h3 text-success">{{ users|selectattr('is_active')|list|length }}</div>
+                                <div class="h3 text-success">{{ active_users }}</div>
                                 <div class="small text-muted">Active Users</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="text-center">
-                                <div class="h3 text-secondary">{{ users|selectattr('auth_type', 'equalto', 'tacacs')|list|length }}</div>
+                                <div class="h3 text-secondary">{{ tacacs_users }}</div>
                                 <div class="small text-muted">TACACS+ Users</div>
                             </div>
                         </div>
@@ -139,7 +331,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
@@ -169,4 +361,72 @@
         </div>
     </div>
 </div>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+.sortable i {
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+
+.sortable[data-sort="{{ sort_by }}"] i {
+    opacity: 1;
+    color: #0d6efd;
+}
+</style>
+
+<script>
+// Auto-submit form when filters change
+function submitForm() {
+    document.getElementById('filterForm').submit();
+}
+
+// Clear all filters
+function clearFilters() {
+    window.location.href = '{{ url_for("auth.users") }}';
+}
+
+// Handle sortable column clicks
+document.addEventListener('DOMContentLoaded', function() {
+    const sortableHeaders = document.querySelectorAll('.sortable');
+
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+            const sortBy = this.getAttribute('data-sort');
+            const currentSortBy = '{{ sort_by }}';
+            const currentSortOrder = '{{ sort_order }}';
+
+            let newSortOrder = 'asc';
+            if (sortBy === currentSortBy && currentSortOrder === 'asc') {
+                newSortOrder = 'desc';
+            }
+
+            // Update hidden form fields
+            document.querySelector('input[name="sort_by"]').value = sortBy;
+            document.querySelector('input[name="sort_order"]').value = newSortOrder;
+            document.querySelector('input[name="page"]').value = '1'; // Reset to page 1
+
+            // Submit form
+            document.getElementById('filterForm').submit();
+        });
+    });
+
+    // Handle search on Enter key
+    document.getElementById('search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.querySelector('input[name="page"]').value = '1'; // Reset to page 1
+            document.getElementById('filterForm').submit();
+        }
+    });
+});
+</script>
 {% endblock %}

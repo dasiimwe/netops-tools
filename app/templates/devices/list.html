@@ -17,6 +17,11 @@
                 <i class="bi bi-arrow-repeat"></i> Bulk Collect
             </button>
         </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-warning" onclick="showBulkCredentialModal()" disabled id="bulkCredentialBtn">
+                <i class="bi bi-key"></i> Bulk Assign Credentials
+            </button>
+        </div>
     </div>
 </div>
 
@@ -60,11 +65,12 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <form method="POST" action="{{ url_for('devices.collect_interfaces', device_id=device.id) }}" style="display: inline;">
-                            <button type="submit" class="btn btn-outline-primary" title="Collect Interfaces">
-                                <i class="bi bi-arrow-repeat"></i>
-                            </button>
-                        </form>
+                        <button type="button" class="btn btn-outline-primary" title="Collect Interfaces" onclick="collectInterfaces({{ device.id }}, '{{ device.hostname }}')">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-info" title="Test Connection" onclick="testDeviceConnection({{ device.id }}, '{{ device.hostname }}')">
+                            <i class="bi bi-shield-check"></i>
+                        </button>
                         <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-outline-secondary" title="Edit">
                             <i class="bi bi-pencil"></i>
                         </a>
@@ -81,7 +87,141 @@
     </table>
 </div>
 
+<!-- Bulk Credential Assignment Modal -->
+<div class="modal fade" id="bulkCredentialModal" tabindex="-1" aria-labelledby="bulkCredentialModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkCredentialModalLabel">
+                    <i class="bi bi-key"></i> Bulk Assign Credentials
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="bulkCredentialForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Selected Devices: <span id="selectedDeviceCount">0</span></strong>
+                        <ul id="selectedDevicesList" class="list-unstyled mt-2"></ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Assignment Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="bulk_assignment_type" id="bulk_assignment_none" value="none" checked onchange="toggleBulkCredentialOptions()">
+                            <label class="form-check-label" for="bulk_assignment_none">
+                                Use Default (Remove any specific assignments)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="bulk_assignment_type" id="bulk_assignment_credential" value="credential" onchange="toggleBulkCredentialOptions()">
+                            <label class="form-check-label" for="bulk_assignment_credential">
+                                Specific Credential
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="bulk_assignment_type" id="bulk_assignment_pool" value="pool" onchange="toggleBulkCredentialOptions()">
+                            <label class="form-check-label" for="bulk_assignment_pool">
+                                Credential Pool
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="bulk_credential_select" style="display: none;">
+                        <label for="bulk_credential_id" class="form-label">Select Credential</label>
+                        <select class="form-select" id="bulk_credential_id" name="bulk_credential_id">
+                            <option value="">-- Select a credential --</option>
+                            {% for credential in available_credentials %}
+                            <option value="{{ credential.id }}">
+                                {{ credential.name }} ({{ credential.username }} - {{ credential.credential_type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="bulk_pool_select" style="display: none;">
+                        <label for="bulk_credential_pool_id" class="form-label">Select Credential Pool</label>
+                        <select class="form-select" id="bulk_credential_pool_id" name="bulk_credential_pool_id">
+                            <option value="">-- Select a credential pool --</option>
+                            {% for pool in available_pools %}
+                            <option value="{{ pool.id }}">
+                                {{ pool.name }} ({{ pool.credentials|length }} credentials)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This will replace any existing credential assignments for the selected devices.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-key"></i> Assign Credentials
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="progressModalLabel">
+                    <i class="bi bi-arrow-repeat"></i> Collecting Interfaces from <span id="deviceHostname"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Main Status -->
+                <div class="mb-3">
+                    <strong>Status:</strong> <span id="currentStatus" class="badge bg-info">Starting...</span>
+                </div>
+
+                <!-- Current Command -->
+                <div class="mb-3" id="currentCommandSection" style="display: none;">
+                    <strong>Current Command:</strong>
+                    <div class="font-monospace text-muted" id="currentCommand"></div>
+                </div>
+
+                <!-- Commands Progress -->
+                <div class="mb-3" id="commandsSection" style="display: none;">
+                    <strong>Commands:</strong>
+                    <div id="commandsList" class="mt-2"></div>
+                </div>
+
+                <!-- Results -->
+                <div class="mb-3" id="resultsSection" style="display: none;">
+                    <strong>Results:</strong>
+                    <div class="alert alert-success">
+                        Found <span id="interfacesCount">0</span> interfaces with IP addresses.
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div class="mb-3" id="errorSection" style="display: none;">
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> <span id="errorMessage"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeButton">Close</button>
+                <button type="button" class="btn btn-primary" id="refreshButton" onclick="refreshPage()" style="display: none;">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh Page
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let progressEventSource = null;
+
 function toggleAll(source) {
     var checkboxes = document.querySelectorAll('.device-checkbox');
     for (var i = 0; i < checkboxes.length; i++) {
@@ -89,24 +229,253 @@ function toggleAll(source) {
     }
 }
 
+function collectInterfaces(deviceId, hostname) {
+    // Start progress collection
+    fetch(`/devices/${deviceId}/collect-progress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.progress_enabled) {
+            // Show progress modal and start listening for updates
+            showProgressModal(hostname, data.session_id);
+        } else {
+            // Fallback to regular collection
+            window.location.href = `/devices/${deviceId}/collect`;
+        }
+    })
+    .catch(error => {
+        console.error('Error starting collection:', error);
+        alert('Error starting interface collection');
+    });
+}
+
+function showProgressModal(hostname, sessionId) {
+    // Setup modal
+    document.getElementById('deviceHostname').textContent = hostname;
+    document.getElementById('currentStatus').textContent = 'Starting...';
+    document.getElementById('currentStatus').className = 'badge bg-info';
+
+    // Hide all sections initially
+    document.getElementById('currentCommandSection').style.display = 'none';
+    document.getElementById('commandsSection').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+    document.getElementById('refreshButton').style.display = 'none';
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+    modal.show();
+
+    // Start listening for progress updates
+    startProgressStream(sessionId);
+}
+
+function startProgressStream(sessionId) {
+    // Close existing connection if any
+    if (progressEventSource) {
+        progressEventSource.close();
+    }
+
+    progressEventSource = new EventSource(`/devices/progress-stream/${sessionId}`);
+
+    progressEventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            handleProgressUpdate(data);
+        } catch (error) {
+            console.error('Error parsing progress data:', error);
+        }
+    };
+
+    progressEventSource.onerror = function(error) {
+        console.error('Progress stream error:', error);
+        progressEventSource.close();
+    };
+}
+
+function handleProgressUpdate(data) {
+    switch(data.type) {
+        case 'progress':
+            updateProgressDisplay(data);
+            break;
+        case 'complete':
+            handleCompletion(data);
+            break;
+        case 'error':
+            handleError(data);
+            break;
+    }
+}
+
+function updateProgressDisplay(data) {
+    // Update status
+    let statusBadge = document.getElementById('currentStatus');
+    statusBadge.textContent = formatStatus(data.status);
+
+    switch(data.status) {
+        case 'connecting':
+            statusBadge.className = 'badge bg-warning';
+            break;
+        case 'connected':
+            statusBadge.className = 'badge bg-info';
+            break;
+        case 'parsing':
+            statusBadge.className = 'badge bg-primary';
+            break;
+        case 'updating_database':
+            statusBadge.className = 'badge bg-primary';
+            break;
+        case 'completed':
+            statusBadge.className = 'badge bg-success';
+            break;
+        case 'failed':
+            statusBadge.className = 'badge bg-danger';
+            break;
+        default:
+            statusBadge.className = 'badge bg-secondary';
+    }
+
+    // Update current command
+    if (data.current_command) {
+        document.getElementById('currentCommandSection').style.display = 'block';
+        document.getElementById('currentCommand').textContent = data.current_command;
+    }
+
+    // Update commands list
+    if (data.commands && data.commands.length > 0) {
+        document.getElementById('commandsSection').style.display = 'block';
+        updateCommandsList(data.commands);
+    }
+
+    // Show interfaces found if available
+    if (data.interfaces_found > 0) {
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('interfacesCount').textContent = data.interfaces_found;
+    }
+
+    // Show error if present
+    if (data.error) {
+        document.getElementById('errorSection').style.display = 'block';
+        document.getElementById('errorMessage').textContent = data.error;
+    }
+}
+
+function updateCommandsList(commands) {
+    const commandsList = document.getElementById('commandsList');
+    commandsList.innerHTML = '';
+
+    commands.forEach(command => {
+        const commandDiv = document.createElement('div');
+        commandDiv.className = 'command-item d-flex justify-content-between align-items-center py-1';
+
+        const commandText = document.createElement('span');
+        commandText.className = 'font-monospace';
+        commandText.textContent = command.command;
+
+        const statusSpan = document.createElement('span');
+        switch(command.status) {
+            case 'pending':
+                statusSpan.innerHTML = '<i class="bi bi-clock text-muted"></i> Pending';
+                break;
+            case 'executing':
+                statusSpan.innerHTML = '<i class="bi bi-arrow-repeat text-primary"></i> Running...';
+                break;
+            case 'completed':
+                statusSpan.innerHTML = `<i class="bi bi-check-circle text-success"></i> Done (${command.output_length} chars)`;
+                break;
+            case 'failed':
+                statusSpan.innerHTML = '<i class="bi bi-x-circle text-danger"></i> Failed';
+                statusSpan.title = command.error || 'Unknown error';
+                break;
+        }
+
+        commandDiv.appendChild(commandText);
+        commandDiv.appendChild(statusSpan);
+        commandsList.appendChild(commandDiv);
+    });
+}
+
+function formatStatus(status) {
+    const statusMap = {
+        'starting': 'Starting...',
+        'connecting': 'Connecting...',
+        'connected': 'Connected',
+        'parsing': 'Parsing Data',
+        'updating_database': 'Updating Database',
+        'completed': 'Completed',
+        'failed': 'Failed'
+    };
+    return statusMap[status] || status;
+}
+
+function handleCompletion(data) {
+    // Close progress stream
+    if (progressEventSource) {
+        progressEventSource.close();
+        progressEventSource = null;
+    }
+
+    // Update final status
+    document.getElementById('currentStatus').textContent = data.success ? 'Completed Successfully' : 'Failed';
+    document.getElementById('currentStatus').className = data.success ? 'badge bg-success' : 'badge bg-danger';
+
+    // Hide current command section
+    document.getElementById('currentCommandSection').style.display = 'none';
+
+    // Show final results
+    if (data.success) {
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('interfacesCount').textContent = data.interfaces_found;
+        document.getElementById('refreshButton').style.display = 'inline-block';
+    }
+
+    // Show error if failed
+    if (!data.success && data.error) {
+        document.getElementById('errorSection').style.display = 'block';
+        document.getElementById('errorMessage').textContent = data.error;
+    }
+}
+
+function handleError(data) {
+    // Close progress stream
+    if (progressEventSource) {
+        progressEventSource.close();
+        progressEventSource = null;
+    }
+
+    // Show error
+    document.getElementById('currentStatus').textContent = 'Error';
+    document.getElementById('currentStatus').className = 'badge bg-danger';
+    document.getElementById('errorSection').style.display = 'block';
+    document.getElementById('errorMessage').textContent = data.error;
+}
+
+function refreshPage() {
+    window.location.reload();
+}
+
 function bulkCollect() {
     var selected = [];
     var checkboxes = document.querySelectorAll('.device-checkbox:checked');
-    
+
     if (checkboxes.length === 0) {
         alert('Please select at least one device');
         return;
     }
-    
+
     if (!confirm('Collect interfaces from ' + checkboxes.length + ' device(s)?')) {
         return;
     }
-    
+
     // Create form and submit
     var form = document.createElement('form');
     form.method = 'POST';
     form.action = '{{ url_for("devices.bulk_collect") }}';
-    
+
     checkboxes.forEach(function(checkbox) {
         var input = document.createElement('input');
         input.type = 'hidden';
@@ -114,9 +483,197 @@ function bulkCollect() {
         input.value = checkbox.value;
         form.appendChild(input);
     });
-    
+
     document.body.appendChild(form);
     form.submit();
 }
+
+function updateBulkButtons() {
+    var checkboxes = document.querySelectorAll('.device-checkbox:checked');
+    var bulkCredentialBtn = document.getElementById('bulkCredentialBtn');
+
+    if (checkboxes.length > 0) {
+        bulkCredentialBtn.disabled = false;
+    } else {
+        bulkCredentialBtn.disabled = true;
+    }
+}
+
+function showBulkCredentialModal() {
+    var checkboxes = document.querySelectorAll('.device-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        alert('Please select at least one device');
+        return;
+    }
+
+    // Update device count and list
+    document.getElementById('selectedDeviceCount').textContent = checkboxes.length;
+
+    var devicesList = document.getElementById('selectedDevicesList');
+    devicesList.innerHTML = '';
+
+    checkboxes.forEach(function(checkbox) {
+        var row = checkbox.closest('tr');
+        var hostname = row.cells[1].textContent.trim();
+        var ipAddress = row.cells[2].textContent.trim();
+
+        var listItem = document.createElement('li');
+        listItem.innerHTML = `<small class="text-muted">${hostname} (${ipAddress})</small>`;
+        devicesList.appendChild(listItem);
+    });
+
+    // Reset form
+    document.getElementById('bulk_assignment_none').checked = true;
+    toggleBulkCredentialOptions();
+
+    // Show modal
+    var modal = new bootstrap.Modal(document.getElementById('bulkCredentialModal'));
+    modal.show();
+}
+
+function toggleBulkCredentialOptions() {
+    var assignmentType = document.querySelector('input[name="bulk_assignment_type"]:checked').value;
+    var credentialSelect = document.getElementById('bulk_credential_select');
+    var poolSelect = document.getElementById('bulk_pool_select');
+
+    // Hide both initially
+    credentialSelect.style.display = 'none';
+    poolSelect.style.display = 'none';
+
+    // Show relevant option
+    if (assignmentType === 'credential') {
+        credentialSelect.style.display = 'block';
+    } else if (assignmentType === 'pool') {
+        poolSelect.style.display = 'block';
+    }
+}
+
+// Handle bulk credential form submission
+document.addEventListener('DOMContentLoaded', function() {
+    // Update button states when checkboxes change
+    document.addEventListener('change', function(event) {
+        if (event.target.classList.contains('device-checkbox') || event.target.id === 'selectAll') {
+            updateBulkButtons();
+        }
+    });
+
+    // Handle bulk credential form submission
+    document.getElementById('bulkCredentialForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        var assignmentType = document.querySelector('input[name="bulk_assignment_type"]:checked').value;
+        var credentialId = document.getElementById('bulk_credential_id').value;
+        var poolId = document.getElementById('bulk_credential_pool_id').value;
+
+        // Validate selection
+        if (assignmentType === 'credential' && !credentialId) {
+            alert('Please select a credential');
+            return;
+        }
+
+        if (assignmentType === 'pool' && !poolId) {
+            alert('Please select a credential pool');
+            return;
+        }
+
+        var checkboxes = document.querySelectorAll('.device-checkbox:checked');
+        if (checkboxes.length === 0) {
+            alert('No devices selected');
+            return;
+        }
+
+        // Create form and submit
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("devices.bulk_assign_credentials") }}';
+
+        // Add assignment type
+        var assignmentInput = document.createElement('input');
+        assignmentInput.type = 'hidden';
+        assignmentInput.name = 'assignment_type';
+        assignmentInput.value = assignmentType;
+        form.appendChild(assignmentInput);
+
+        // Add credential or pool id
+        if (assignmentType === 'credential' && credentialId) {
+            var credInput = document.createElement('input');
+            credInput.type = 'hidden';
+            credInput.name = 'credential_id';
+            credInput.value = credentialId;
+            form.appendChild(credInput);
+        } else if (assignmentType === 'pool' && poolId) {
+            var poolInput = document.createElement('input');
+            poolInput.type = 'hidden';
+            poolInput.name = 'credential_pool_id';
+            poolInput.value = poolId;
+            form.appendChild(poolInput);
+        }
+
+        // Add device IDs
+        checkboxes.forEach(function(checkbox) {
+            var deviceInput = document.createElement('input');
+            deviceInput.type = 'hidden';
+            deviceInput.name = 'device_ids[]';
+            deviceInput.value = checkbox.value;
+            form.appendChild(deviceInput);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+    });
+});
+
+function testDeviceConnection(deviceId, hostname) {
+    // Disable button and show loading
+    const button = event.target;
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-arrow-repeat spin"></i>';
+
+    fetch(`/devices/${deviceId}/test-connection`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+
+        if (data.success) {
+            alert(`✅ Connection to ${hostname} successful!\n\nCredential used: ${data.credential_name}\nConnection time: ${data.connection_time}ms`);
+        } else {
+            alert(`❌ Connection to ${hostname} failed!\n\nError: ${data.error}\n\nCredentials tried: ${data.credentials_tried || 0}`);
+        }
+    })
+    .catch(error => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+
+        alert(`❌ Error testing connection to ${hostname}\n\nError: ${error.message}`);
+    });
+}
+
+// Clean up event source when page unloads
+window.addEventListener('beforeunload', function() {
+    if (progressEventSource) {
+        progressEventSource.close();
+    }
+});
 </script>
+
+<style>
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}

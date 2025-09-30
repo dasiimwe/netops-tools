@@ -1,8 +1,9 @@
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.routes import settings_bp
-from app.models import db, Settings, AuditLog
+from app.models import db, Settings, AuditLog, CredentialPool
 from app.auth import test_tacacs_connection
+import json
 
 @settings_bp.route('/')
 @login_required
@@ -29,10 +30,21 @@ def index():
         'password_require_uppercase': Settings.get_value('password_require_uppercase', True),
         'password_require_lowercase': Settings.get_value('password_require_lowercase', True),
         'password_require_number': Settings.get_value('password_require_number', True),
-        'password_require_special': Settings.get_value('password_require_special', True)
+        'password_require_special': Settings.get_value('password_require_special', True),
+        # Interface collection progress bar
+        'show_interface_progress': Settings.get_value('show_interface_progress', True),
+        # Default credential pool
+        'default_credential_pool_id': Settings.get_value('default_credential_pool_id', None)
     }
-    
-    return render_template('settings/index.html', settings=settings)
+
+    # Get credential pool data for template
+    available_credential_pools = CredentialPool.query.order_by(CredentialPool.name).all()
+    current_default_pool = CredentialPool.get_default()
+
+    return render_template('settings/index.html',
+                         settings=settings,
+                         available_credential_pools=available_credential_pools,
+                         current_default_pool=current_default_pool)
 
 @settings_bp.route('/update', methods=['POST'])
 @login_required
@@ -127,6 +139,36 @@ def update():
                       'bool',
                       'Require at least one special character in passwords')
 
+    # Update interface collection progress bar setting
+    Settings.set_value('show_interface_progress',
+                      request.form.get('show_interface_progress') == 'on',
+                      'bool',
+                      'Show detailed progress bar during interface collection')
+
+    # Update default credential pool setting
+    default_credential_pool_id = request.form.get('default_credential_pool_id')
+    if default_credential_pool_id and default_credential_pool_id.strip():
+        # Validate that the pool exists
+        pool = CredentialPool.query.get(int(default_credential_pool_id))
+        if pool:
+            # Clear any existing default pool
+            CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
+            # Set the new default pool
+            pool.is_default = True
+            Settings.set_value('default_credential_pool_id',
+                              int(default_credential_pool_id),
+                              'int',
+                              'Default credential pool for device authentication')
+        else:
+            flash('Selected credential pool not found', 'warning')
+    else:
+        # Clear default pool setting
+        CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
+        Settings.set_value('default_credential_pool_id',
+                          None,
+                          'string',
+                          'Default credential pool for device authentication')
+
     # Log settings update
     audit_log = AuditLog(
         user_id=current_user.id,
@@ -164,3 +206,108 @@ def audit_logs():
     )
     
     return render_template('settings/audit_logs.html', logs=logs)
+
+@settings_bp.route('/api/settings/command-rules', methods=['GET'])
+@login_required
+def get_command_rules():
+    """Get current command validation rules"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    # Get command rules from database or use defaults
+    default_rules = {
+        'safePrefixes': [
+            'show ',
+            'execute ping ',
+            'execute traceroute ',
+            'ping ',
+            'traceroute ',
+            'trace ',
+            'get system ',
+            'diagnose '
+        ],
+        'dangerousPatterns': [
+            'delete',
+            'remove',
+            'erase',
+            'format',
+            'reload',
+            'reboot',
+            'shutdown',
+            'clear',
+            'reset',
+            'write',
+            'copy',
+            'configure',
+            'config',
+            'exit',
+            'quit',
+            'end',
+            'commit',
+            'save'
+        ],
+        'standaloneCommands': [
+            'uptime',
+            'version',
+            'date',
+            'clock',
+            'whoami',
+            'pwd'
+        ]
+    }
+
+    try:
+        # Try to get rules from database
+        rules_json = Settings.get_value('command_validation_rules', None)
+        if rules_json:
+            rules = json.loads(rules_json)
+        else:
+            rules = default_rules
+
+        return jsonify({'success': True, 'rules': rules})
+
+    except Exception as e:
+        # Return default rules if there's an error
+        return jsonify({'success': True, 'rules': default_rules})
+
+@settings_bp.route('/api/settings/command-rules', methods=['POST'])
+@login_required
+def save_command_rules():
+    """Save command validation rules"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+
+    try:
+        data = request.get_json()
+
+        # Validate data structure
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'message': 'Invalid data format'}), 400
+
+        required_keys = ['safePrefixes', 'dangerousPatterns', 'standaloneCommands']
+        for key in required_keys:
+            if key not in data or not isinstance(data[key], list):
+                return jsonify({'success': False, 'message': f'Missing or invalid {key}'}), 400
+
+        # Save rules to database
+        Settings.set_value('command_validation_rules',
+                          json.dumps(data),
+                          'json',
+                          'Command validation rules for Command Run Tool')
+
+        # Log the change
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            action='command_rules_updated',
+            details=f'Command validation rules updated. Safe prefixes: {len(data["safePrefixes"])}, '
+                   f'Dangerous patterns: {len(data["dangerousPatterns"])}, '
+                   f'Standalone commands: {len(data["standaloneCommands"])}',
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Command rules saved successfully'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error saving rules: {str(e)}'}), 500

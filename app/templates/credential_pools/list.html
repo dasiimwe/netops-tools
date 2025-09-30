@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Credential Pools - Network Device Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Credential Pools</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('credential_pools.add_pool') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Credential Pool
+            </a>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('credential_pools.usage_report') }}" class="btn btn-sm btn-info">
+                <i class="bi bi-graph-up"></i> Usage Report
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if pools %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Credentials</th>
+                <th>Default</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pool in pools %}
+            <tr>
+                <td>
+                    <strong>{{ pool.name }}</strong>
+                    {% if pool.is_default %}
+                    <span class="badge bg-primary">Default</span>
+                    {% endif %}
+                </td>
+                <td>{{ pool.description or '<em>No description</em>' | safe }}</td>
+                <td>
+                    <span class="badge bg-info">{{ pool.credentials | length }}</span>
+                    {% if pool.credentials %}
+                        <small class="text-muted">
+                            ({{ pool.get_credentials_list() | map(attribute='name') | join(', ') }})
+                        </small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if pool.is_default %}
+                        <i class="bi bi-check-circle text-success"></i> Yes
+                    {% else %}
+                        <form method="POST" action="{{ url_for('credential_pools.set_default', pool_id=pool.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Set as Default">
+                                <i class="bi bi-star"></i>
+                            </button>
+                        </form>
+                    {% endif %}
+                </td>
+                <td>
+                    <small class="text-muted">
+                        {{ pool.created_at.strftime('%Y-%m-%d %H:%M') if pool.created_at else 'Unknown' }}
+                    </small>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('credential_pools.edit_pool', pool_id=pool.id) }}"
+                           class="btn btn-outline-secondary" title="Edit">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-outline-info"
+                                onclick="testPool({{ pool.id }}, '{{ pool.name }}')" title="Test Credentials">
+                            <i class="bi bi-shield-check"></i>
+                        </button>
+                        {% if not pool.is_default %}
+                        <form method="POST" action="{{ url_for('credential_pools.delete_pool', pool_id=pool.id) }}"
+                              style="display: inline;"
+                              onsubmit="return confirm('Are you sure you want to delete credential pool \'{{ pool.name }}\'?');">
+                            <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <h5>No credential pools found</h5>
+    <p>Create your first credential pool to organize and manage device access credentials.</p>
+    <a href="{{ url_for('credential_pools.add_pool') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add Credential Pool
+    </a>
+</div>
+{% endif %}
+
+<!-- Test Results Modal -->
+<div class="modal fade" id="testResultsModal" tabindex="-1" aria-labelledby="testResultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testResultsModalLabel">
+                    <i class="bi bi-shield-check"></i> Test Results for <span id="poolName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="testResults"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function testPool(poolId, poolName) {
+    document.getElementById('poolName').textContent = poolName;
+    document.getElementById('testResults').innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('testResultsModal'));
+    modal.show();
+
+    fetch(`/credential-pools/api/${poolId}/test`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<thead><tr><th>Order</th><th>Credential</th><th>Username</th><th>Status</th></tr></thead><tbody>';
+
+            data.results.forEach(result => {
+                const statusClass = result.status === 'success' ? 'success' : 'danger';
+                const statusIcon = result.status === 'success' ? 'check-circle' : 'x-circle';
+
+                html += `<tr>
+                    <td>${result.order}</td>
+                    <td>${result.credential_name}</td>
+                    <td>${result.username || '<em>Hidden</em>'}</td>
+                    <td>
+                        <span class="badge bg-${statusClass}">
+                            <i class="bi bi-${statusIcon}"></i> ${result.status === 'success' ? 'Success' : 'Failed'}
+                        </span>
+                        ${result.status === 'error' ? `<br><small class="text-muted">${result.message}</small>` : ''}
+                    </td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            document.getElementById('testResults').innerHTML = html;
+        } else {
+            document.getElementById('testResults').innerHTML =
+                `<div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Error testing credentials: ${data.error}
+                </div>`;
+        }
+    })
+    .catch(error => {
+        document.getElementById('testResults').innerHTML =
+            `<div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+            </div>`;
+    });
+}
+</script>
+{% endblock %}
