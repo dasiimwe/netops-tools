@@ -221,8 +221,7 @@
                     <input type="text" id="commandInput" placeholder="Enter safe command (e.g., show version)" style="width: 200px;">
                     <button onclick="addCommand()">Add Command</button>
                     <div class="command-help-text">
-                        ✅ Allowed: show, ping, trace, debug (read-only)<br>
-                        ❌ Blocked: configure, set, write, delete, reboot
+                         Allowed: show, ping, traceroute, get, diagnose, execute<br>
                     </div>
                 </div>
                 <div id="commandList" class="command-list">
@@ -557,7 +556,7 @@
 
         // Load command validation rules from server
         function loadCommandRules() {
-            fetch('/api/settings/command-rules')
+            fetch('/settings/api/command-rules')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {

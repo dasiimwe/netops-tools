@@ -207,7 +207,7 @@ def audit_logs():
     
     return render_template('settings/audit_logs.html', logs=logs)
 
-@settings_bp.route('/api/settings/command-rules', methods=['GET'])
+@settings_bp.route('/api/command-rules', methods=['GET'])
 @login_required
 def get_command_rules():
     """Get current command validation rules"""
@@ -270,7 +270,7 @@ def get_command_rules():
         # Return default rules if there's an error
         return jsonify({'success': True, 'rules': default_rules})
 
-@settings_bp.route('/api/settings/command-rules', methods=['POST'])
+@settings_bp.route('/api/command-rules', methods=['POST'])
 @login_required
 def save_command_rules():
     """Save command validation rules"""

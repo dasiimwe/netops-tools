@@ -408,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Load command rules from server
 function loadCommandRules() {
-    fetch('/api/settings/command-rules')
+    fetch('/settings/api/command-rules')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -582,7 +582,7 @@ function removeStandaloneCommand(index) {
 
 // Save command rules to server
 function saveCommandRules() {
-    fetch('/api/settings/command-rules', {
+    fetch('/settings/api/command-rules', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
