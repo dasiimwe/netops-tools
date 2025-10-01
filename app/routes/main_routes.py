@@ -638,6 +638,127 @@ def is_ip_address(target):
         except socket.error:
             return False
 
+def validate_traceroute_target(target):
+    """Validate a traceroute target for security and format compliance"""
+    if not target or not isinstance(target, str):
+        return False, "Target must be a non-empty string"
+
+    target = target.strip()
+
+    # Check for spaces or control characters
+    if ' ' in target or any(ord(c) < 32 for c in target):
+        return False, "Target contains invalid characters (spaces or control characters)"
+
+    # Check length limits
+    if len(target) > 253:
+        return False, "Target too long (max 253 characters)"
+
+    # IPv4 pattern validation
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    if re.match(ipv4_pattern, target):
+        octets = target.split('.')
+        for octet in octets:
+            if int(octet) > 255:
+                return False, "Invalid IPv4 address (octet > 255)"
+        return True, "Valid IPv4 address"
+
+    # IPv6 pattern validation (basic)
+    if ':' in target:
+        if re.match(r'^[0-9a-fA-F:]+$', target):
+            return True, "Valid IPv6 address"
+        return False, "Invalid IPv6 address format"
+
+    # Hostname validation - only alphanumeric, dots, and hyphens allowed
+    hostname_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+    if re.match(hostname_pattern, target):
+        # Additional checks for hostname labels
+        labels = target.split('.')
+        for label in labels:
+            if len(label) > 63:
+                return False, "Hostname label too long (max 63 characters)"
+            if label.startswith('-') or label.endswith('-'):
+                return False, "Hostname labels cannot start or end with hyphens"
+        return True, "Valid hostname"
+
+    return False, "Invalid target format"
+
+def validate_dns_target(target, lookup_type=None):
+    """Validate a DNS lookup target for security and format compliance"""
+    if not target or not isinstance(target, str):
+        return False, "Target must be a non-empty string"
+
+    target = target.strip()
+
+    # Check for spaces or control characters
+    if ' ' in target or any(ord(c) < 32 for c in target):
+        return False, "Target contains invalid characters (spaces or control characters)"
+
+    # Check length limits
+    if len(target) > 253:
+        return False, "Target too long (max 253 characters)"
+
+    # IPv4 pattern validation
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    if re.match(ipv4_pattern, target):
+        octets = target.split('.')
+        for octet in octets:
+            if int(octet) > 255:
+                return False, "Invalid IPv4 address (octet > 255)"
+
+        # IP addresses are valid for all lookup types
+        return True, "Valid IPv4 address"
+
+    # IPv6 pattern validation (basic)
+    if ':' in target:
+        if re.match(r'^[0-9a-fA-F:]+$', target):
+            # IPv6 addresses are valid for all lookup types
+            return True, "Valid IPv6 address"
+        return False, "Invalid IPv6 address format"
+
+    # Hostname validation - only alphanumeric, dots, and hyphens allowed
+    hostname_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+    if re.match(hostname_pattern, target):
+        # Additional checks for hostname labels
+        labels = target.split('.')
+        for label in labels:
+            if len(label) > 63:
+                return False, "Hostname label too long (max 63 characters)"
+            if label.startswith('-') or label.endswith('-'):
+                return False, "Hostname labels cannot start or end with hyphens"
+
+        # Hostnames are valid for all lookup types
+        return True, "Valid hostname"
+
+    return False, "Invalid target format"
+
+def validate_dns_server(server):
+    """Validate a DNS server address"""
+    if not server or not isinstance(server, str):
+        return False, "DNS server must be a non-empty string"
+
+    server = server.strip()
+
+    # Check for spaces or control characters
+    if ' ' in server or any(ord(c) < 32 for c in server):
+        return False, "DNS server contains invalid characters"
+
+    # IPv4 pattern validation
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    if re.match(ipv4_pattern, server):
+        octets = server.split('.')
+        for octet in octets:
+            if int(octet) > 255:
+                return False, "Invalid IPv4 address (octet > 255)"
+        return True, "Valid IPv4 DNS server"
+
+    # IPv6 pattern validation (basic)
+    if ':' in server:
+        if re.match(r'^[0-9a-fA-F:]+$', server):
+            return True, "Valid IPv6 DNS server"
+        return False, "Invalid IPv6 address format"
+
+    return False, "DNS servers must be valid IP addresses"
+
 @main_bp.route('/api/dns-lookup', methods=['POST'])
 def dns_lookup():
     """API endpoint for DNS lookups"""
@@ -651,6 +772,29 @@ def dns_lookup():
             return jsonify({
                 'success': False,
                 'error': 'No targets provided'
+            })
+
+        # Validate all targets
+        invalid_targets = []
+        for target in targets:
+            is_valid, message = validate_dns_target(target, lookup_type)
+            if not is_valid:
+                invalid_targets.append(f"{target}: {message}")
+
+        # Validate all DNS servers
+        invalid_servers = []
+        for server in servers:
+            is_valid, message = validate_dns_server(server)
+            if not is_valid:
+                invalid_servers.append(f"{server}: {message}")
+
+        # Check for validation errors
+        all_errors = invalid_targets + invalid_servers
+        if all_errors:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input(s) detected',
+                'invalid_inputs': all_errors
             })
 
         results = {}
@@ -689,6 +833,18 @@ def perform_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_
     try:
         system = platform.system()
 
+        # Resolve hostname to IP if needed
+        resolved_ip = None
+        display_target = target
+        if not is_ip_address(target):
+            try:
+                # Resolve hostname to IP
+                resolved_ip = socket.gethostbyname(target)
+                display_target = f"{target} ({resolved_ip})"
+            except socket.gaierror:
+                # If resolution fails, just use the original target
+                display_target = target
+
         # Build the traceroute command based on OS
         if system == "Windows":
             # Windows tracert command
@@ -724,7 +880,11 @@ def perform_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_
         # Parse the traceroute output
         hops = parse_traceroute_output(stdout, system)
 
-        return {'hops': hops}
+        return {
+            'hops': hops,
+            'resolved_ip': resolved_ip,
+            'display_target': display_target
+        }
 
     except subprocess.TimeoutExpired:
         return {'error': 'Traceroute timeout exceeded'}
@@ -735,6 +895,18 @@ def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=
     """Perform traceroute and yield results hop by hop"""
     try:
         system = platform.system()
+
+        # Resolve hostname to IP if needed
+        resolved_ip = None
+        display_target = target
+        if not is_ip_address(target):
+            try:
+                # Resolve hostname to IP
+                resolved_ip = socket.gethostbyname(target)
+                display_target = f"{target} ({resolved_ip})"
+            except socket.gaierror:
+                # If resolution fails, just use the original target
+                display_target = target
 
         # Build the traceroute command based on OS
         if system == "Windows":
@@ -761,11 +933,13 @@ def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=
             bufsize=1  # Line buffered
         )
 
-        # Yield initial message
+        # Yield initial message with resolved IP if available
         yield json.dumps({
             'type': 'start',
             'target': target,
-            'message': f'Starting traceroute to {target}'
+            'resolved_ip': resolved_ip,
+            'display_target': display_target,
+            'message': f'Starting traceroute to {display_target}'
         }) + '\n'
 
         # Read output line by line
@@ -954,11 +1128,32 @@ def traceroute_stream():
 
         # Set SSE headers and send target list
         valid_targets = [t.strip() for t in targets if t.strip()]
-        yield 'data: ' + json.dumps({'type': 'init', 'message': 'Initializing traceroutes', 'targets': valid_targets}) + '\n\n'
 
-        if not valid_targets:
+        # Validate all targets
+        invalid_targets = []
+        validated_targets = []
+        for target in valid_targets:
+            is_valid, message = validate_traceroute_target(target)
+            if not is_valid:
+                invalid_targets.append(f"{target}: {message}")
+            else:
+                validated_targets.append(target)
+
+        if invalid_targets:
+            yield 'data: ' + json.dumps({
+                'type': 'error',
+                'message': 'Invalid targets detected',
+                'invalid_targets': invalid_targets
+            }) + '\n\n'
+            return
+
+        yield 'data: ' + json.dumps({'type': 'init', 'message': 'Initializing traceroutes', 'targets': validated_targets}) + '\n\n'
+
+        if not validated_targets:
             yield 'data: ' + json.dumps({'type': 'all_complete', 'message': 'No valid targets'}) + '\n\n'
             return
+
+        valid_targets = validated_targets
 
         # Create a shared queue for all traceroute results
         result_queue = queue.Queue()
@@ -1039,6 +1234,20 @@ def traceroute():
             return jsonify({
                 'success': False,
                 'error': 'No targets provided'
+            })
+
+        # Validate all targets
+        invalid_targets = []
+        for target in targets:
+            is_valid, message = validate_traceroute_target(target)
+            if not is_valid:
+                invalid_targets.append(f"{target}: {message}")
+
+        if invalid_targets:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid targets detected',
+                'invalid_targets': invalid_targets
             })
 
         results = {}

@@ -261,7 +261,10 @@
                 rows="10"
                 cols="50"
                 placeholder="Enter domains or IP addresses, one per line:&#10;"
+                oninput="validateDnsInput()"
                 style="width: 50%; font-family: monospace;"></textarea>
+
+            <div id="dnsValidation" style="margin-top: 5px; min-height: 20px;"></div>
 
             <div style="margin-top: 15px;">
                 <!-- DNS Servers Section -->
@@ -277,13 +280,16 @@
                     rows="3"
                     cols="30"
                     placeholder=""
+                    oninput="validateDnsInput()"
                     style="width: 50%; font-family: monospace; margin-top: 5px;"></textarea>
+
+                <div id="dnsServersValidation" style="margin-top: 5px; min-height: 20px;"></div>
 
                 <!-- Lookup Type on same line as button -->
                 <div style="margin-top: 15px;">
                     <label style="display: inline-block; margin-right: 10px;">
                         <strong>Lookup Type:</strong>
-                        <select id="lookupType" style="padding: 5px; margin-left: 5px;">
+                        <select id="lookupType" style="padding: 5px; margin-left: 5px;" onchange="validateDnsInput()">
                             <option value="A">A Record (IPv4)</option>
                             <option value="AAAA">AAAA Record (IPv6)</option>
                             <option value="CNAME">CNAME Record</option>
@@ -332,7 +338,10 @@
                 rows="10"
                 cols="50"
                 placeholder="Enter IP addresses or hostnames, one per line:&#10;"
+                oninput="validateTracerouteInput()"
                 style="width: 50%; font-family: monospace;"></textarea>
+
+            <div id="tracerouteValidation" style="margin-top: 5px; min-height: 20px;"></div>
 
             <div style="margin-top: 15px;">
                 <label><strong>Traceroute Options:</strong></label>
@@ -1361,6 +1370,31 @@
             const targets = dnsInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
             const servers = dnsServers ? dnsServers.split('\n').map(line => line.trim()).filter(line => line.length > 0) : [];
 
+            // Validate all targets
+            const invalidTargets = [];
+            for (const target of targets) {
+                const validation = validateDnsTarget(target, lookupType);
+                if (!validation.isValid) {
+                    invalidTargets.push(`${target}: ${validation.message}`);
+                }
+            }
+
+            // Validate all DNS servers
+            const invalidServers = [];
+            for (const server of servers) {
+                const validation = validateDnsServer(server);
+                if (!validation.isValid) {
+                    invalidServers.push(`${server}: ${validation.message}`);
+                }
+            }
+
+            // Check for validation errors
+            const allErrors = [...invalidTargets, ...invalidServers];
+            if (allErrors.length > 0) {
+                alert('Invalid input(s) detected:\n\n' + allErrors.join('\n') + '\n\nPlease correct these entries and try again.');
+                return;
+            }
+
             dnsProgress.style.display = 'block';
             dnsResults.innerHTML = 'Performing DNS lookups...';
 
@@ -1621,6 +1655,331 @@
         let tracerouteEventSource = null;
         let currentTracerouteData = {};
 
+        // Function to validate hostname or IP address for traceroute
+        function validateTracerouteTarget(target) {
+            // Remove any whitespace
+            target = target.trim();
+
+            // Check for spaces or invalid characters
+            if (target.includes(' ')) {
+                return { isValid: false, message: 'Spaces are not allowed' };
+            }
+
+            // IPv4 address pattern
+            const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+            // IPv6 address pattern (simplified)
+            const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+
+            // Hostname/domain pattern - only allows letters, numbers, dots, and hyphens
+            // Must start and end with alphanumeric, can contain dots and hyphens in the middle
+            const hostnamePattern = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+
+            // Check if it's an IPv4 address
+            if (ipv4Pattern.test(target)) {
+                // Validate IPv4 octets are in range 0-255
+                const octets = target.split('.');
+                for (const octet of octets) {
+                    const num = parseInt(octet);
+                    if (num < 0 || num > 255) {
+                        return { isValid: false, message: 'Invalid IPv4 address (octets must be 0-255)' };
+                    }
+                }
+                return { isValid: true, type: 'ipv4' };
+            }
+
+            // Check if it's an IPv6 address
+            if (ipv6Pattern.test(target) || target.includes(':')) {
+                // Basic IPv6 validation
+                if (target.match(/[^0-9a-fA-F:]/)) {
+                    return { isValid: false, message: 'Invalid IPv6 address (contains invalid characters)' };
+                }
+                return { isValid: true, type: 'ipv6' };
+            }
+
+            // Check if it's a valid hostname/domain
+            if (hostnamePattern.test(target)) {
+                // Additional hostname validations
+                if (target.length > 253) {
+                    return { isValid: false, message: 'Hostname too long (max 253 characters)' };
+                }
+
+                // Check each label (part between dots)
+                const labels = target.split('.');
+                for (const label of labels) {
+                    if (label.length > 63) {
+                        return { isValid: false, message: 'Domain label too long (max 63 characters per label)' };
+                    }
+                    if (label.startsWith('-') || label.endsWith('-')) {
+                        return { isValid: false, message: 'Domain labels cannot start or end with hyphens' };
+                    }
+                }
+
+                return { isValid: true, type: 'hostname' };
+            }
+
+            // Check for common invalid characters
+            const invalidChars = target.match(/[^a-zA-Z0-9.\-:]/);
+            if (invalidChars) {
+                return {
+                    isValid: false,
+                    message: `Invalid character(s) found: ${invalidChars.join(', ')}. Only letters, numbers, dots, hyphens, and colons (for IPv6) are allowed.`
+                };
+            }
+
+            return { isValid: false, message: 'Invalid format. Please enter a valid IP address or hostname.' };
+        }
+
+        // Function to validate DNS lookup target (hostname, IP, or domain)
+        function validateDnsTarget(target, lookupType) {
+            // Remove any whitespace
+            target = target.trim();
+
+            // Check for spaces or invalid characters
+            if (target.includes(' ')) {
+                return { isValid: false, message: 'Spaces are not allowed' };
+            }
+
+            // IPv4 address pattern
+            const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+            // IPv6 address pattern (simplified)
+            const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+
+            // Hostname/domain pattern - only allows letters, numbers, dots, and hyphens
+            const hostnamePattern = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+
+            // Check if it's an IPv4 address
+            if (ipv4Pattern.test(target)) {
+                // Validate IPv4 octets are in range 0-255
+                const octets = target.split('.');
+                for (const octet of octets) {
+                    const num = parseInt(octet);
+                    if (num < 0 || num > 255) {
+                        return { isValid: false, message: 'Invalid IPv4 address (octets must be 0-255)' };
+                    }
+                }
+
+                // IP addresses are valid for all lookup types
+                return { isValid: true, type: 'ipv4' };
+            }
+
+            // Check if it's an IPv6 address
+            if (ipv6Pattern.test(target) || target.includes(':')) {
+                // Basic IPv6 validation
+                if (target.match(/[^0-9a-fA-F:]/)) {
+                    return { isValid: false, message: 'Invalid IPv6 address (contains invalid characters)' };
+                }
+
+                // IPv6 addresses are valid for all lookup types
+                return { isValid: true, type: 'ipv6' };
+            }
+
+            // Check if it's a valid hostname/domain
+            if (hostnamePattern.test(target)) {
+                // Additional hostname validations
+                if (target.length > 253) {
+                    return { isValid: false, message: 'Hostname too long (max 253 characters)' };
+                }
+
+                // Check each label (part between dots)
+                const labels = target.split('.');
+                for (const label of labels) {
+                    if (label.length > 63) {
+                        return { isValid: false, message: 'Domain label too long (max 63 characters per label)' };
+                    }
+                    if (label.startsWith('-') || label.endsWith('-')) {
+                        return { isValid: false, message: 'Domain labels cannot start or end with hyphens' };
+                    }
+                }
+
+                // Hostnames are valid for all lookup types
+                return { isValid: true, type: 'hostname' };
+            }
+
+            // Check for common invalid characters
+            const invalidChars = target.match(/[^a-zA-Z0-9.\-:]/);
+            if (invalidChars) {
+                return {
+                    isValid: false,
+                    message: `Invalid character(s) found: ${invalidChars.join(', ')}. Only letters, numbers, dots, hyphens, and colons (for IPv6) are allowed.`
+                };
+            }
+
+            return { isValid: false, message: 'Invalid format. Please enter a valid IP address or hostname.' };
+        }
+
+        // Function to validate DNS server address
+        function validateDnsServer(server) {
+            server = server.trim();
+
+            // Check for spaces
+            if (server.includes(' ')) {
+                return { isValid: false, message: 'Spaces are not allowed in DNS server addresses' };
+            }
+
+            // IPv4 address pattern
+            const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+            // IPv6 address pattern (simplified)
+            const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+
+            // Check if it's an IPv4 address
+            if (ipv4Pattern.test(server)) {
+                const octets = server.split('.');
+                for (const octet of octets) {
+                    const num = parseInt(octet);
+                    if (num < 0 || num > 255) {
+                        return { isValid: false, message: 'Invalid IPv4 address (octets must be 0-255)' };
+                    }
+                }
+                return { isValid: true, type: 'ipv4' };
+            }
+
+            // Check if it's an IPv6 address
+            if (ipv6Pattern.test(server) || server.includes(':')) {
+                if (server.match(/[^0-9a-fA-F:]/)) {
+                    return { isValid: false, message: 'Invalid IPv6 address (contains invalid characters)' };
+                }
+                return { isValid: true, type: 'ipv6' };
+            }
+
+            return { isValid: false, message: 'DNS servers must be valid IP addresses' };
+        }
+
+        // Function to validate DNS input in real-time
+        function validateDnsInput() {
+            const textarea = document.getElementById('dnsInput');
+            const serversTextarea = document.getElementById('dnsServers');
+            const lookupType = document.getElementById('lookupType').value;
+            const validationDiv = document.getElementById('dnsValidation');
+            const serversValidationDiv = document.getElementById('dnsServersValidation');
+
+            const input = textarea.value.trim();
+            const serversInput = serversTextarea.value.trim();
+
+            // Validate targets
+            if (!input) {
+                validationDiv.innerHTML = '';
+                textarea.style.borderColor = '';
+            } else {
+                const targets = input.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                const invalidTargets = [];
+                const validTargets = [];
+
+                for (const target of targets) {
+                    const validation = validateDnsTarget(target, lookupType);
+                    if (!validation.isValid) {
+                        invalidTargets.push(`${target}: ${validation.message}`);
+                    } else {
+                        validTargets.push(`${target} (${validation.type})`);
+                    }
+                }
+
+                if (invalidTargets.length > 0) {
+                    textarea.style.borderColor = '#dc3545';
+                    validationDiv.innerHTML = `
+                        <div style="color: #dc3545; font-size: 12px; font-family: monospace;">
+                            <strong>❌ ${invalidTargets.length} invalid target(s):</strong><br>
+                            ${invalidTargets.slice(0, 3).join('<br>')}
+                            ${invalidTargets.length > 3 ? `<br>... and ${invalidTargets.length - 3} more` : ''}
+                        </div>
+                    `;
+                } else {
+                    textarea.style.borderColor = '#28a745';
+                    validationDiv.innerHTML = `
+                        <div style="color: #28a745; font-size: 12px; font-family: monospace;">
+                            <strong>✅ ${validTargets.length} valid target(s)</strong>
+                            ${validTargets.length <= 3 ? '<br>' + validTargets.join('<br>') : ''}
+                        </div>
+                    `;
+                }
+            }
+
+            // Validate DNS servers
+            if (!serversInput) {
+                serversValidationDiv.innerHTML = '<div style="color: #6c757d; font-size: 12px;">Using system default DNS servers</div>';
+                serversTextarea.style.borderColor = '';
+            } else {
+                const servers = serversInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                const invalidServers = [];
+                const validServers = [];
+
+                for (const server of servers) {
+                    const validation = validateDnsServer(server);
+                    if (!validation.isValid) {
+                        invalidServers.push(`${server}: ${validation.message}`);
+                    } else {
+                        validServers.push(`${server} (${validation.type})`);
+                    }
+                }
+
+                if (invalidServers.length > 0) {
+                    serversTextarea.style.borderColor = '#dc3545';
+                    serversValidationDiv.innerHTML = `
+                        <div style="color: #dc3545; font-size: 12px; font-family: monospace;">
+                            <strong>❌ ${invalidServers.length} invalid DNS server(s):</strong><br>
+                            ${invalidServers.slice(0, 2).join('<br>')}
+                            ${invalidServers.length > 2 ? `<br>... and ${invalidServers.length - 2} more` : ''}
+                        </div>
+                    `;
+                } else {
+                    serversTextarea.style.borderColor = '#28a745';
+                    serversValidationDiv.innerHTML = `
+                        <div style="color: #28a745; font-size: 12px; font-family: monospace;">
+                            <strong>✅ ${validServers.length} valid DNS server(s)</strong>
+                            ${validServers.length <= 3 ? '<br>' + validServers.join('<br>') : ''}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Function to validate traceroute input in real-time
+        function validateTracerouteInput() {
+            const textarea = document.getElementById('tracerouteTargets');
+            const validationDiv = document.getElementById('tracerouteValidation');
+            const input = textarea.value.trim();
+
+            if (!input) {
+                validationDiv.innerHTML = '';
+                textarea.style.borderColor = '';
+                return;
+            }
+
+            const targets = input.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const invalidTargets = [];
+            const validTargets = [];
+
+            for (const target of targets) {
+                const validation = validateTracerouteTarget(target);
+                if (!validation.isValid) {
+                    invalidTargets.push(`${target}: ${validation.message}`);
+                } else {
+                    validTargets.push(`${target} (${validation.type})`);
+                }
+            }
+
+            if (invalidTargets.length > 0) {
+                textarea.style.borderColor = '#dc3545';
+                validationDiv.innerHTML = `
+                    <div style="color: #dc3545; font-size: 12px; font-family: monospace;">
+                        <strong>❌ ${invalidTargets.length} invalid target(s):</strong><br>
+                        ${invalidTargets.slice(0, 3).join('<br>')}
+                        ${invalidTargets.length > 3 ? `<br>... and ${invalidTargets.length - 3} more` : ''}
+                    </div>
+                `;
+            } else {
+                textarea.style.borderColor = '#28a745';
+                validationDiv.innerHTML = `
+                    <div style="color: #28a745; font-size: 12px; font-family: monospace;">
+                        <strong>✅ ${validTargets.length} valid target(s)</strong>
+                        ${validTargets.length <= 5 ? ': ' + validTargets.join(', ') : ''}
+                    </div>
+                `;
+            }
+        }
+
         async function performTraceroute() {
             const targetsInput = document.getElementById('tracerouteTargets').value.trim();
             const maxHops = parseInt(document.getElementById('maxHops').value);
@@ -1641,6 +2000,20 @@
 
             // Parse input - split by lines and filter empty lines
             const targets = targetsInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+
+            // Validate all targets
+            const invalidTargets = [];
+            for (const target of targets) {
+                const validation = validateTracerouteTarget(target);
+                if (!validation.isValid) {
+                    invalidTargets.push(`${target}: ${validation.message}`);
+                }
+            }
+
+            if (invalidTargets.length > 0) {
+                alert('Invalid target(s) detected:\n\n' + invalidTargets.join('\n') + '\n\nPlease correct these entries and try again.');
+                return;
+            }
 
             // Close any existing SSE connection
             if (tracerouteEventSource) {
@@ -1701,6 +2074,8 @@
 
                 case 'start':
                     tracerouteProgressDetail.textContent = data.message;
+                    // Use display_target if available (includes resolved IP), otherwise use original target
+                    const displayTarget = data.display_target || data.target;
                     // Create separate div for this target if it doesn't exist
                     let targetDiv = document.getElementById(`traceroute-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`);
                     if (!targetDiv) {
@@ -1710,7 +2085,7 @@
 
                         const targetHeader = document.createElement('div');
                         targetHeader.style.cssText = 'font-weight: bold; color: #333; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 5px;';
-                        targetHeader.textContent = `Target: ${data.target}`;
+                        targetHeader.textContent = `Target: ${displayTarget}`;
                         targetDiv.appendChild(targetHeader);
 
                         const hopsContainer = document.createElement('pre');
@@ -1833,7 +2208,9 @@
             output.push('');
 
             for (const [target, targetData] of Object.entries(results)) {
-                output.push(`Target: ${target}`);
+                // Use display_target if available (includes resolved IP), otherwise use original target
+                const displayTarget = targetData.display_target || target;
+                output.push(`Target: ${displayTarget}`);
                 output.push('-'.repeat(40));
 
                 if (targetData.error) {
