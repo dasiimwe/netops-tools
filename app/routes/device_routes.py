@@ -5,6 +5,7 @@ from app.models import db, Device, DeviceGroup, Interface, AuditLog, Settings, C
 from app.device_connectors import get_connector
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from sqlalchemy import or_, desc, asc, func
 import logging
 import csv
 import io
@@ -107,15 +108,114 @@ def try_connect_with_credentials(device, credentials_list, **connector_kwargs):
 @device_bp.route('/')
 @login_required
 def list_devices():
-    devices = Device.query.all()
+    # Get query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', 'hostname')
+    sort_order = request.args.get('sort_order', 'asc')
+    vendor_filter = request.args.get('vendor', '')
+    status_filter = request.args.get('status', '')
+    group_filter = request.args.get('group', '', type=int)
+
+    # Validate per_page limits
+    if per_page not in [5, 10, 25, 50, 100]:
+        per_page = 10
+
+    # Validate sort_by field
+    valid_sort_fields = ['hostname', 'ip_address', 'vendor', 'is_reachable', 'last_reachability_check']
+    if sort_by not in valid_sort_fields:
+        sort_by = 'hostname'
+
+    # Validate sort_order
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'asc'
+
+    # Start building the query
+    query = Device.query
+
+    # Apply search filter
+    if search:
+        search_filter = or_(
+            Device.hostname.ilike(f'%{search}%'),
+            Device.ip_address.ilike(f'%{search}%')
+        )
+        query = query.filter(search_filter)
+
+    # Apply vendor filter
+    if vendor_filter:
+        query = query.filter(Device.vendor == vendor_filter)
+
+    # Apply status filter
+    if status_filter == 'reachable':
+        query = query.filter(Device.is_reachable == True)
+    elif status_filter == 'unreachable':
+        query = query.filter(Device.is_reachable == False)
+
+    # Apply group filter
+    if group_filter:
+        query = query.filter(Device.group_id == group_filter)
+
+    # Special handling for interface count sorting
+    if sort_by == 'interface_count':
+        # Use a subquery to count interfaces
+        interface_count_subq = db.session.query(
+            Interface.device_id,
+            func.count(Interface.id).label('interface_count')
+        ).group_by(Interface.device_id).subquery()
+
+        query = query.outerjoin(interface_count_subq, Device.id == interface_count_subq.c.device_id)
+
+        if sort_order == 'desc':
+            query = query.order_by(desc(func.coalesce(interface_count_subq.c.interface_count, 0)))
+        else:
+            query = query.order_by(asc(func.coalesce(interface_count_subq.c.interface_count, 0)))
+    else:
+        # Apply normal sorting
+        sort_column = getattr(Device, sort_by)
+        if sort_order == 'desc':
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+
+    # Apply pagination
+    devices_paginated = query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    # Get additional data for filters and bulk operations
     groups = DeviceGroup.query.all()
     available_credentials = Credential.query.order_by(Credential.name).all()
     available_pools = CredentialPool.query.order_by(CredentialPool.name).all()
+
+    # Get unique vendors for filter dropdown
+    vendors = db.session.query(Device.vendor).distinct().order_by(Device.vendor).all()
+    vendors = [v[0] for v in vendors if v[0]]
+
+    # Get device statistics
+    total_devices = Device.query.count()
+    reachable_devices = Device.query.filter_by(is_reachable=True).count()
+    unreachable_devices = Device.query.filter_by(is_reachable=False).count()
+
     return render_template('devices/list.html',
-                         devices=devices,
+                         devices=devices_paginated.items,
+                         pagination=devices_paginated,
                          groups=groups,
                          available_credentials=available_credentials,
-                         available_pools=available_pools)
+                         available_pools=available_pools,
+                         vendors=vendors,
+                         search=search,
+                         sort_by=sort_by,
+                         sort_order=sort_order,
+                         vendor_filter=vendor_filter,
+                         status_filter=status_filter,
+                         group_filter=group_filter,
+                         per_page=per_page,
+                         total_devices=total_devices,
+                         reachable_devices=reachable_devices,
+                         unreachable_devices=unreachable_devices)
 
 @device_bp.route('/add', methods=['GET', 'POST'])
 @login_required

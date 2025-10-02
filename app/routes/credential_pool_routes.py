@@ -7,9 +7,61 @@ from datetime import datetime
 @credential_pool_bp.route('/')
 @login_required
 def list_pools():
-    """List all credential pools"""
-    pools = CredentialPool.query.order_by(CredentialPool.name).all()
-    return render_template('credential_pools/list.html', pools=pools)
+    """List all credential pools with pagination, sorting, and search"""
+    # Get query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
+    default_filter = request.args.get('default_filter', '')
+
+    # Build base query
+    query = CredentialPool.query
+
+    # Apply search filter
+    if search:
+        search_term = f'%{search}%'
+        query = query.filter(
+            CredentialPool.name.ilike(search_term) |
+            CredentialPool.description.ilike(search_term)
+        )
+
+    # Apply default filter
+    if default_filter == 'default':
+        query = query.filter(CredentialPool.is_default == True)
+    elif default_filter == 'non_default':
+        query = query.filter(CredentialPool.is_default == False)
+
+    # Apply sorting
+    valid_sort_columns = ['name', 'description', 'created_at', 'is_default']
+    if sort_by not in valid_sort_columns:
+        sort_by = 'name'
+
+    sort_column = getattr(CredentialPool, sort_by)
+    if sort_order == 'desc':
+        sort_column = sort_column.desc()
+
+    query = query.order_by(sort_column)
+
+    # Apply pagination
+    per_page = min(per_page, 100)  # Limit to 100 per page
+    pools_paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Get total counts for stats
+    total_pools = CredentialPool.query.count()
+    default_pools = CredentialPool.query.filter(CredentialPool.is_default == True).count()
+
+    return render_template('credential_pools/list.html',
+                         pools=pools_paginated.items,
+                         pagination=pools_paginated,
+                         search=search,
+                         sort_by=sort_by,
+                         sort_order=sort_order,
+                         default_filter=default_filter,
+                         per_page=per_page,
+                         total_pools=total_pools,
+                         default_pools=default_pools)
 
 @credential_pool_bp.route('/add', methods=['GET', 'POST'])
 @login_required
