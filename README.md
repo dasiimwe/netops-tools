@@ -1,4 +1,4 @@
-# Netops Toolkit
+# netops Toolkit
 
 Comprehensive network operations toolkit with device management, IP translation, and network diagnostics supporting Cisco, Palo Alto, and FortiGate devices.
 
