@@ -143,11 +143,53 @@
             margin-top: 2px;
             line-height: 1.2;
         }
+        .insights-tab {
+            display: inline-block;
+            padding: 6px 12px;
+            margin-right: 4px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+        .insights-tab.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .insights-tab-content {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background: #fff;
+            margin-top: 5px;
+        }
+        .insights-tab-content.active {
+            display: block;
+        }
+        .insights-stat {
+            text-align: center;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 3px;
+        }
+        .insights-stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .insights-stat-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0;">Netops Toolkit</h2>
+        <h2 style="margin: 0;">netops Toolkit</h2>
         <a href="{{ url_for('main.admin') }}" style="color: #0000EE; text-decoration: underline;">Admin Dashboard →</a>
     </div>
 
@@ -156,6 +198,7 @@
         <div class="tab" onclick="showTab('command-runner')">Command Run Tool</div>
         <div class="tab" onclick="showTab('dns-lookup')">DNS Lookup</div>
         <div class="tab" onclick="showTab('traceroute')">Traceroute</div>
+        <div class="tab" onclick="showTab('url-insights')">URL/App Insights</div>
     </div>
 
     <!-- IP Translator Tab -->
@@ -395,6 +438,117 @@
                 <br>
                 <div id="tracerouteResults" style="border: 0px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.4; background: white; margin-top: 10px; white-space: pre-wrap; overflow-x: auto;">
                     <em>Traceroute results will appear here...</em>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL/App Insights Tab -->
+    <div id="url-insights" class="tab-content">
+        <p>URL/App Insights - Browser-based Diagnostics</p>
+
+        <div style="margin-bottom: 20px;">
+            <label><strong>URL to Analyze:</strong></label><br>
+            <input type="url" id="urlInsightsInput" placeholder="https://example.com"
+                   style="width: 60%; padding: 8px; font-family: monospace;">
+            <button onclick="analyzeURL()" style="padding: 8px 16px; background: #007cba; color: white; border: none; cursor: pointer; margin-left: 10px;">Analyze</button>
+            <button onclick="clearURLAnalysis()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; margin-left: 5px;">Clear</button>
+            <br>
+            <small style="color: #666;">Enter a full URL including http:// or https://</small>
+        </div>
+
+        <!-- Dual pane layout -->
+        <div style="display: flex; gap: 20px; height: 600px;">
+            <!-- Left pane: Content Display -->
+            <div style="flex: 1; border: 1px solid #ccc; background: white; position: relative;">
+                <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between;">
+                    <strong>Content Display</strong>
+                    <span id="contentStatus" style="color: #666; font-size: 12px;">No URL loaded</span>
+                </div>
+                <div id="urlInsightsContent" style="height: calc(100% - 35px); overflow: auto; padding: 20px; background: #f9f9f9;">
+                    <div id="urlPreview" style="text-align: center; color: #666; padding-top: 100px;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🌐</div>
+                        <p style="font-size: 16px; margin-bottom: 10px;">Enter a URL to begin analysis</p>
+                        <p style="font-size: 12px; color: #999;">Click "Analyze" to open the URL and capture diagnostics</p>
+                    </div>
+                    <div id="urlInfo" style="display: none;">
+                        <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+                            <h4 style="margin: 0 0 10px 0; color: #333;">URL Information</h4>
+                            <div style="font-family: monospace; font-size: 12px;">
+                                <p><strong>URL:</strong> <span id="analyzed-url"></span></p>
+                                <p><strong>Protocol:</strong> <span id="analyzed-protocol"></span></p>
+                                <p><strong>Hostname:</strong> <span id="analyzed-hostname"></span></p>
+                                <p><strong>Port:</strong> <span id="analyzed-port"></span></p>
+                            </div>
+                        </div>
+                        <div style="background: #e7f3ff; padding: 12px; border: 1px solid #007cba; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 13px;">
+                                ℹ️ <strong>Note:</strong> The URL has been opened in a new tab. Check the Diagnostics panel for connection details.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right pane: Diagnostics -->
+            <div style="flex: 1; border: 1px solid #ccc; background: white; display: flex; flex-direction: column;">
+                <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between;">
+                    <strong>Diagnostics</strong>
+                    <button id="exportInsightsBtn" onclick="exportInsights()" style="display: none; padding: 4px 8px; font-size: 12px; cursor: pointer;">Export</button>
+                </div>
+
+                <!-- Tab buttons -->
+                <div style="display: flex; border-bottom: 1px solid #ccc; background: #f9f9f9;">
+                    <div class="insights-tab active" onclick="showInsightsTab('overview')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">Overview</div>
+                    <div class="insights-tab" onclick="showInsightsTab('requests')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">Requests</div>
+                    <div class="insights-tab" onclick="showInsightsTab('tls')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">TLS/SSL</div>
+                    <div class="insights-tab" onclick="showInsightsTab('timeline')" style="padding: 8px 16px; cursor: pointer;">Timeline</div>
+                </div>
+
+                <!-- Tab content areas -->
+                <div style="flex: 1; overflow-y: auto; padding: 10px;">
+                    <!-- Overview tab -->
+                    <div id="overview-content" class="insights-tab-content">
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
+                                <div id="stat-total-requests" style="font-size: 20px; font-weight: bold; color: #007cba;">0</div>
+                                <div style="font-size: 11px; color: #666;">REQUESTS</div>
+                            </div>
+                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
+                                <div id="stat-total-size" style="font-size: 20px; font-weight: bold; color: #007cba;">0 B</div>
+                                <div style="font-size: 11px; color: #666;">TOTAL SIZE</div>
+                            </div>
+                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
+                                <div id="stat-load-time" style="font-size: 20px; font-weight: bold; color: #007cba;">-</div>
+                                <div style="font-size: 11px; color: #666;">LOAD TIME</div>
+                            </div>
+                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
+                                <div id="stat-status-code" style="font-size: 20px; font-weight: bold; color: #007cba;">-</div>
+                                <div style="font-size: 11px; color: #666;">STATUS</div>
+                            </div>
+                        </div>
+                        <div style="font-family: monospace; font-size: 12px; line-height: 1.6;">
+                            <div style="padding: 8px; background: #e7f3ff; border-left: 3px solid #007cba; margin-bottom: 5px;">
+                                ℹ Ready to analyze URLs<br>
+                                <small style="color: #666;">Connection diagnostics will appear here</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Requests tab -->
+                    <div id="requests-content" class="insights-tab-content">
+                        <em style="color: #666;">No requests captured yet...</em>
+                    </div>
+
+                    <!-- TLS/SSL tab -->
+                    <div id="tls-content" class="insights-tab-content">
+                        <em style="color: #666;">No TLS information available...</em>
+                    </div>
+
+                    <!-- Timeline tab -->
+                    <div id="timeline-content" class="insights-tab-content">
+                        <em style="color: #666;">No timeline events yet...</em>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2660,6 +2814,329 @@
 
         inputText.addEventListener('blur', function() {
             this.placeholder = 'Paste your text here... IP addresses will be automatically translated to show hostname and interface information.';
+        });
+
+        // URL/App Insights Functions
+        let urlInsightsData = {
+            requests: [],
+            startTime: null,
+            loadTime: null,
+            totalSize: 0,
+            statusCode: null,
+            tlsInfo: null,
+            timeline: []
+        };
+
+        function showInsightsTab(tabName) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.insights-tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.insights-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName + '-content').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function analyzeURL() {
+            const urlInput = document.getElementById('urlInsightsInput');
+            let url = urlInput.value.trim();
+
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            // Auto-add https:// if no protocol specified
+            if (!url.match(/^https?:\/\//i)) {
+                url = 'https://' + url;
+                urlInput.value = url;
+            }
+
+            // Validate URL
+            let urlObj;
+            try {
+                urlObj = new URL(url);
+            } catch (e) {
+                alert('Please enter a valid URL');
+                return;
+            }
+
+            // Reset data
+            urlInsightsData = {
+                requests: [],
+                startTime: Date.now(),
+                loadTime: null,
+                totalSize: 0,
+                statusCode: null,
+                tlsInfo: null,
+                timeline: [],
+                url: url,
+                urlObj: urlObj
+            };
+
+            // Show URL info in left pane
+            document.getElementById('urlPreview').style.display = 'none';
+            document.getElementById('urlInfo').style.display = 'block';
+            document.getElementById('analyzed-url').textContent = url;
+            document.getElementById('analyzed-protocol').textContent = urlObj.protocol;
+            document.getElementById('analyzed-hostname').textContent = urlObj.hostname;
+            document.getElementById('analyzed-port').textContent = urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80');
+            document.getElementById('contentStatus').textContent = 'Analyzing...';
+            document.getElementById('exportInsightsBtn').style.display = 'inline-block';
+
+            // Add initial timeline entry
+            addTimelineEntry('Analysis started', 'info');
+
+            // Detect protocol
+            if (urlObj.protocol === 'https:') {
+                urlInsightsData.tlsInfo = {
+                    enabled: true,
+                    protocol: 'TLS/SSL',
+                    detected: true
+                };
+                addTimelineEntry('HTTPS detected - TLS encryption enabled', 'success');
+            } else {
+                urlInsightsData.tlsInfo = {
+                    enabled: false,
+                    protocol: 'HTTP',
+                    detected: false
+                };
+                addTimelineEntry('HTTP detected - No encryption', 'warning');
+            }
+            updateTLSDisplay();
+
+            // Make fetch request to analyze
+            addTimelineEntry('Initiating connection to: ' + url, 'info');
+
+            // Add error listener to catch network errors before they reach console
+            const startFetch = Date.now();
+
+            fetch(url, {
+                method: 'HEAD',
+                mode: 'no-cors'
+            })
+            .then(() => {
+                urlInsightsData.loadTime = Date.now() - urlInsightsData.startTime;
+                urlInsightsData.statusCode = 200;
+                addTimelineEntry('HEAD request completed (' + urlInsightsData.loadTime + 'ms)', 'success');
+                document.getElementById('contentStatus').textContent = 'Connection successful';
+
+                // Try to get more details with GET
+                return fetch(url, { method: 'GET', mode: 'no-cors' });
+            })
+            .then(response => {
+                const fullLoadTime = Date.now() - urlInsightsData.startTime;
+                addTimelineEntry('GET request completed (' + fullLoadTime + 'ms)', 'success');
+                urlInsightsData.loadTime = fullLoadTime;
+
+                // Add simulated request entry
+                urlInsightsData.requests.push({
+                    url: url,
+                    duration: fullLoadTime,
+                    size: 0,
+                    type: 'document'
+                });
+
+                updateRequestsDisplay();
+                updateOverviewStats();
+            })
+            .catch(error => {
+                urlInsightsData.statusCode = 'ERROR';
+                urlInsightsData.loadTime = Date.now() - urlInsightsData.startTime;
+
+                // Detect specific error types
+                let errorType = 'Connection Error';
+                let errorMessage = error.message || 'Unknown error';
+
+                if (error instanceof TypeError) {
+                    if (errorMessage.includes('Failed to fetch')) {
+                        errorType = 'DNS Resolution Failed / Network Error';
+                        addTimelineEntry('DNS lookup failed - hostname could not be resolved', 'error');
+                        addTimelineEntry('Possible causes: Invalid domain, DNS issues, or network connectivity problems', 'error');
+                        document.getElementById('contentStatus').textContent = 'DNS Error';
+                    } else if (errorMessage.includes('NetworkError')) {
+                        errorType = 'Network Error';
+                        addTimelineEntry('Network error occurred during connection', 'error');
+                        document.getElementById('contentStatus').textContent = 'Network Error';
+                    } else if (errorMessage.includes('CORS')) {
+                        errorType = 'CORS Policy Violation';
+                        addTimelineEntry('CORS policy blocked the request', 'warning');
+                        document.getElementById('contentStatus').textContent = 'CORS Blocked';
+                    } else {
+                        addTimelineEntry('Connection failed: ' + errorMessage, 'error');
+                        document.getElementById('contentStatus').textContent = 'Connection Failed';
+                    }
+                } else {
+                    addTimelineEntry('Error: ' + errorMessage, 'error');
+                    document.getElementById('contentStatus').textContent = 'Error';
+                }
+
+                addTimelineEntry('Connection attempt duration: ' + urlInsightsData.loadTime + 'ms', 'info');
+
+                // Add failed request entry
+                urlInsightsData.requests.push({
+                    url: url,
+                    duration: urlInsightsData.loadTime,
+                    size: 0,
+                    type: 'failed',
+                    error: errorType
+                });
+
+                updateRequestsDisplay();
+                updateOverviewStats();
+            });
+        }
+
+        function clearURLAnalysis() {
+            document.getElementById('urlInsightsInput').value = '';
+            document.getElementById('urlPreview').style.display = 'block';
+            document.getElementById('urlInfo').style.display = 'none';
+            document.getElementById('contentStatus').textContent = 'No URL loaded';
+            document.getElementById('exportInsightsBtn').style.display = 'none';
+
+            urlInsightsData = {
+                requests: [],
+                startTime: null,
+                loadTime: null,
+                totalSize: 0,
+                statusCode: null,
+                tlsInfo: null,
+                timeline: []
+            };
+            updateOverviewStats();
+            updateRequestsDisplay();
+            updateTLSDisplay();
+            updateTimelineDisplay();
+        }
+
+        function exportInsights() {
+            const dataStr = JSON.stringify(urlInsightsData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'url-insights-' + Date.now() + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function updateOverviewStats() {
+            document.getElementById('stat-total-requests').textContent = urlInsightsData.requests.length;
+            document.getElementById('stat-total-size').textContent = formatBytes(urlInsightsData.totalSize);
+            document.getElementById('stat-load-time').textContent = urlInsightsData.loadTime ? urlInsightsData.loadTime + ' ms' : '-';
+            document.getElementById('stat-status-code').textContent = urlInsightsData.statusCode || '-';
+        }
+
+        function updateRequestsDisplay() {
+            const container = document.getElementById('requests-content');
+            if (urlInsightsData.requests.length === 0) {
+                container.innerHTML = '<em style="color: #666;">No requests captured yet...</em>';
+                return;
+            }
+
+            let html = '<table style="width: 100%; font-size: 11px; border-collapse: collapse;">';
+            html += '<thead><tr style="background: #f8f9fa; border-bottom: 2px solid #ddd;">';
+            html += '<th style="padding: 6px; text-align: left;">URL</th>';
+            html += '<th style="padding: 6px; text-align: left;">Type</th>';
+            html += '<th style="padding: 6px; text-align: right;">Duration</th>';
+            html += '<th style="padding: 6px; text-align: right;">Size</th>';
+            html += '</tr></thead><tbody>';
+
+            urlInsightsData.requests.forEach(req => {
+                const isError = req.type === 'failed';
+                const rowStyle = isError ? 'border-bottom: 1px solid #eee; background: #fff5f5;' : 'border-bottom: 1px solid #eee;';
+
+                html += '<tr style="' + rowStyle + '">';
+                html += '<td style="padding: 4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + req.url + '</td>';
+
+                if (isError) {
+                    html += '<td style="padding: 4px; color: #dc3545;"><strong>' + (req.error || 'Error') + '</strong></td>';
+                } else {
+                    html += '<td style="padding: 4px;">' + req.type + '</td>';
+                }
+
+                html += '<td style="padding: 4px; text-align: right;">' + Math.round(req.duration) + ' ms</td>';
+                html += '<td style="padding: 4px; text-align: right;">' + (isError ? 'N/A' : formatBytes(req.size)) + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function updateTLSDisplay() {
+            const container = document.getElementById('tls-content');
+            if (!urlInsightsData.tlsInfo) {
+                container.innerHTML = '<em style="color: #666;">No TLS information available...</em>';
+                return;
+            }
+
+            let html = '<div style="font-size: 12px;">';
+            html += '<p><strong>Protocol:</strong> ' + urlInsightsData.tlsInfo.protocol + '</p>';
+            html += '<p><strong>Encryption:</strong> ' + (urlInsightsData.tlsInfo.enabled ?
+                '<span style="color: #28a745;">✓ Enabled</span>' :
+                '<span style="color: #dc3545;">✗ Disabled</span>') + '</p>';
+
+            if (urlInsightsData.tlsInfo.enabled) {
+                html += '<p style="margin-top: 10px;"><strong>Note:</strong> Browser security restrictions prevent detailed certificate inspection. The connection uses HTTPS with TLS encryption.</p>';
+            } else {
+                html += '<p style="margin-top: 10px; color: #dc3545;"><strong>Warning:</strong> This connection is not encrypted. Data is transmitted in plain text.</p>';
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function updateTimelineDisplay() {
+            const container = document.getElementById('timeline-content');
+            if (urlInsightsData.timeline.length === 0) {
+                container.innerHTML = '<em style="color: #666;">No timeline events yet...</em>';
+                return;
+            }
+
+            let html = '<div style="font-size: 11px;">';
+            urlInsightsData.timeline.forEach(event => {
+                let color = '#666';
+                if (event.type === 'success') color = '#28a745';
+                if (event.type === 'error') color = '#dc3545';
+                if (event.type === 'warning') color = '#ffc107';
+
+                html += '<div style="padding: 4px 0; border-bottom: 1px solid #eee;">';
+                html += '<span style="color: ' + color + '; margin-right: 8px;">●</span>';
+                html += '<span style="color: #999; margin-right: 8px;">[' + event.timestamp + ']</span>';
+                html += '<span>' + event.message + '</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function addTimelineEntry(message, type) {
+            const timestamp = new Date().toLocaleTimeString();
+            urlInsightsData.timeline.push({ timestamp, message, type });
+            updateTimelineDisplay();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Initialize insights tab on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default active tab to Overview
+            const overviewTab = document.querySelector('.insights-tab');
+            if (overviewTab) {
+                overviewTab.classList.add('active');
+                document.getElementById('overview-content').classList.add('active');
+            }
         });
     </script>
 </body>
