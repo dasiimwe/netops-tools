@@ -2,16 +2,110 @@
 
 {% block title %}Settings - Network Device Manager{% endblock %}
 
-{% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Settings</h1>
-</div>
+{% block extra_css %}
+<style>
+    /* Cards */
+    .settings-card {
+        border-radius: 0.75rem;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1rem;
+        transition: box-shadow 0.3s ease;
+    }
 
+    .settings-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .settings-card .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 0.75rem 0.75rem 0 0 !important;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #495057;
+    }
+
+    .settings-card .card-body {
+        padding: 0.85rem;
+    }
+
+    /* Form Controls */
+    .settings-card .form-control,
+    .settings-card .form-select {
+        border-radius: 0.375rem;
+        border: 1px solid #dee2e6;
+        transition: all 0.2s ease;
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .settings-card .form-control:focus,
+    .settings-card .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+    }
+
+    .settings-card .form-label {
+        font-size: 0.8125rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .settings-card .form-text {
+        font-size: 0.75rem;
+    }
+
+    /* Buttons */
+    .settings-card .btn {
+        border-radius: 0.375rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        padding: 0.35rem 0.75rem;
+        transition: all 0.2s ease;
+    }
+
+    .settings-card .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Badges */
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        font-size: 0.75rem;
+    }
+
+    /* Alerts */
+    .alert {
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    /* Nav Tabs */
+    .nav-tabs .nav-link {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem 0.375rem 0 0;
+    }
+
+    /* Input Groups */
+    .input-group .btn {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
 <div class="row">
-    <div class="col-md-8">
-        <div class="card">
+    <div class="col-md-12">
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Device Connection Settings</h5>
+                Device Connection Settings
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('settings.update') }}">
@@ -68,9 +162,9 @@
         </div>
 
         <!-- User Interface Settings Card -->
-        <div class="card mt-3">
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">User Interface Settings</h5>
+                User Interface Settings
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('settings.update') }}">
@@ -102,9 +196,9 @@
         </div>
 
         <!-- Credential Settings Card -->
-        <div class="card mt-3">
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Default Credentials</h5>
+                Default Credentials
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('settings.update') }}">
@@ -150,9 +244,9 @@
         </div>
 
         <!-- Command Validation Settings Card -->
-        <div class="card mt-3">
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Command Validation Rules</h5>
+                Command Validation Rules
             </div>
             <div class="card-body">
                 <div class="alert alert-info mb-3">
@@ -259,9 +353,9 @@
         </div>
 
         <!-- Password Complexity Settings Card -->
-        <div class="card mt-3">
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Password Complexity Requirements</h5>
+                Password Complexity Requirements
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('settings.update') }}">
@@ -326,12 +420,11 @@
                 </form>
             </div>
         </div>
-    </div>
 
-    <div class="col-md-4">
-        <div class="card">
+        <!-- TACACS+ Authentication Card -->
+        <div class="card settings-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">TACACS+ Authentication</h5>
+                TACACS+ Authentication
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('settings.update') }}">
@@ -381,22 +474,6 @@
                         <i class="bi bi-wifi"></i> Test Connection
                     </button>
                 </form>
-            </div>
-        </div>
-        
-        <div class="card mt-3">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Quick Links</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('settings.audit_logs') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-journal-text"></i> View Audit Logs
-                    </a>
-                    <a href="{{ url_for('auth.users') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-people"></i> Manage Users
-                    </a>
-                </div>
             </div>
         </div>
     </div>
