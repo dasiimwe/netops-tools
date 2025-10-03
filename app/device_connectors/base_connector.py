@@ -236,6 +236,7 @@ class BaseConnector(ABC):
                 logger.debug(f"Executing: {command}")
                 output = self.execute_command(command)
                 command_outputs[command] = output
+                time.sleep(1)  # 1 second pause between commands
 
             # Parse the interface data
             parse_start_time = datetime.now()

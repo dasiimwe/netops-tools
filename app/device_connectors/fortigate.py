@@ -1,4 +1,5 @@
 import re
+import time
 from typing import Dict, List
 from .base_connector import BaseConnector
 import logging
@@ -145,6 +146,7 @@ class FortiGateConnector(BaseConnector):
             self._log_session_event('command_sent', command=command)
 
             output = self.connection.send_command(command, expect_string=r'#', strip_prompt=False, strip_command=False)
+            time.sleep(1)
 
             self._log_session_event('command_received',
                                   command=command,

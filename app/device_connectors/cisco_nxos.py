@@ -1,4 +1,5 @@
 import re
+import time
 from typing import Dict, List
 from .base_connector import BaseConnector
 import logging
@@ -261,6 +262,7 @@ class CiscoNXOSConnector(BaseConnector):
 
                         # Use execute_command method which has better error handling
                         output = self.execute_command(command)
+                        time.sleep(1)
 
                         self._log_session_event('command_received',
                                               command=command,
