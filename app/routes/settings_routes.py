@@ -36,7 +36,14 @@ def index():
         # Tooltip theme
         'tooltip_theme': Settings.get_value('tooltip_theme', 'light'),
         # Default credential pool
-        'default_credential_pool_id': Settings.get_value('default_credential_pool_id', None)
+        'default_credential_pool_id': Settings.get_value('default_credential_pool_id', None),
+        # Tool visibility settings
+        'tool_ip_translator': Settings.get_value('tool_ip_translator', True),
+        'tool_command_runner': Settings.get_value('tool_command_runner', True),
+        'tool_dns_lookup': Settings.get_value('tool_dns_lookup', True),
+        'tool_traceroute': Settings.get_value('tool_traceroute', True),
+        'tool_url_insights': Settings.get_value('tool_url_insights', True),
+        'tool_whoami': Settings.get_value('tool_whoami', True)
     }
 
     # Get credential pool data for template
@@ -152,6 +159,37 @@ def update():
                       request.form.get('tooltip_theme', 'light'),
                       'string',
                       'IP Translator tooltip color theme')
+
+    # Update tool visibility settings
+    Settings.set_value('tool_ip_translator',
+                      request.form.get('tool_ip_translator') == 'on',
+                      'bool',
+                      'Show IP Translator tool on home page')
+
+    Settings.set_value('tool_command_runner',
+                      request.form.get('tool_command_runner') == 'on',
+                      'bool',
+                      'Show Command Run Tool on home page')
+
+    Settings.set_value('tool_dns_lookup',
+                      request.form.get('tool_dns_lookup') == 'on',
+                      'bool',
+                      'Show DNS Lookup tool on home page')
+
+    Settings.set_value('tool_traceroute',
+                      request.form.get('tool_traceroute') == 'on',
+                      'bool',
+                      'Show Traceroute tool on home page')
+
+    Settings.set_value('tool_url_insights',
+                      request.form.get('tool_url_insights') == 'on',
+                      'bool',
+                      'Show URL/App Insights tool on home page')
+
+    Settings.set_value('tool_whoami',
+                      request.form.get('tool_whoami') == 'on',
+                      'bool',
+                      'Show WhoAmI tool on home page')
 
     # Update default credential pool setting
     default_credential_pool_id = request.form.get('default_credential_pool_id')

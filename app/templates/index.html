@@ -194,14 +194,28 @@
     </div>
 
     <div class="tabs">
+        {% if tool_visibility.ip_translator %}
         <div class="tab active" onclick="showTab('ip-translator')">IP Translator</div>
-        <div class="tab" onclick="showTab('command-runner')">Command Run Tool</div>
-        <div class="tab" onclick="showTab('dns-lookup')">DNS Lookup</div>
-        <div class="tab" onclick="showTab('traceroute')">Traceroute</div>
-        <div class="tab" onclick="showTab('url-insights')">URL/App Insights</div>
+        {% endif %}
+        {% if tool_visibility.command_runner %}
+        <div class="tab{% if not tool_visibility.ip_translator %} active{% endif %}" onclick="showTab('command-runner')">Command Run Tool</div>
+        {% endif %}
+        {% if tool_visibility.dns_lookup %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner %} active{% endif %}" onclick="showTab('dns-lookup')">DNS Lookup</div>
+        {% endif %}
+        {% if tool_visibility.traceroute %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}" onclick="showTab('traceroute')">Traceroute</div>
+        {% endif %}
+        {% if tool_visibility.url_insights %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}" onclick="showTab('url-insights')">URL/App Insights</div>
+        {% endif %}
+        {% if tool_visibility.whoami %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}" onclick="showTab('whoami')">WhoAmI</div>
+        {% endif %}
     </div>
 
     <!-- IP Translator Tab -->
+    {% if tool_visibility.ip_translator %}
     <div id="ip-translator" class="tab-content active">
         <p>Network IP Address Translator</p>
 
@@ -229,9 +243,11 @@
             <em>Your translated text will appear here...</em>
         </div>
     </div>
+    {% endif %}
 
     <!-- Command Run Tool Tab -->
-    <div id="command-runner" class="tab-content">
+    {% if tool_visibility.command_runner %}
+    <div id="command-runner" class="tab-content{% if not tool_visibility.ip_translator %} active{% endif %}">
         <p>Network Device Command Runner</p>
 
         <div style="display: flex; gap: 20px;">
@@ -291,9 +307,11 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- DNS Lookup Tab -->
-    <div id="dns-lookup" class="tab-content">
+    {% if tool_visibility.dns_lookup %}
+    <div id="dns-lookup" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner %} active{% endif %}">
         <p>Bulk DNS Lookup Tool</p>
 
         <div>
@@ -364,9 +382,11 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Traceroute Tab -->
-    <div id="traceroute" class="tab-content">
+    {% if tool_visibility.traceroute %}
+    <div id="traceroute" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}">
         <p>Parallel Traceroute Tool</p>
 
         <div>
@@ -442,9 +462,11 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- URL/App Insights Tab -->
-    <div id="url-insights" class="tab-content">
+    {% if tool_visibility.url_insights %}
+    <div id="url-insights" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}">
         <p>URL/App Insights - Browser-based Diagnostics</p>
 
         <div style="margin-bottom: 20px;">
@@ -553,6 +575,46 @@
             </div>
         </div>
     </div>
+    {% endif %}
+
+    <!-- WhoAmI Tab -->
+    {% if tool_visibility.whoami %}
+    <div id="whoami" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}">
+        <p></p>
+
+        <div style="max-width: 50%; margin: 0 auto;">
+            <label><strong>Your IP Address:</strong></label><br>
+            <div id="userIpAddress" style="border: 1px solid #ccc; padding: 20px; background: white; font-family: 'Consolas', monospace; font-size: 24px; font-weight: bold; text-align: center; margin: 10px 0;">
+                <span style="color: #999;">Loading...</span>
+            </div>
+
+            <div id="ipDetails" style="margin-top: 10px; display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label><strong>IP Version:</strong></label><br>
+                        <div id="ipVersion" style="border: 1px solid #ccc; padding: 8px; background: white; font-family: 'Consolas', monospace;">-</div>
+                    </div>
+                    <div>
+                        <label><strong>Type:</strong></label><br>
+                        <div id="ipType" style="border: 1px solid #ccc; padding: 8px; background: white; font-family: 'Consolas', monospace;">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reverseDns" style="margin-top: 10px; display: none;">
+                <label><strong>Reverse DNS:</strong></label><br>
+                <div id="reverseDnsValue" style="border: 1px solid #ccc; padding: 8px; background: white; font-family: 'Consolas', monospace; word-break: break-all;">-</div>
+            </div>
+
+            <br>
+            <div style="background: #f0f0f0; padding: 15px; border: 1px solid #ccc; margin-top: 10px;">
+                <p style="margin: 0 0 10px 0;"><strong>About:</strong><br>
+                This tool displays your public IP address as seen by the server.</p>
+               
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
 
 
@@ -717,7 +779,35 @@
 
             // Add active class to clicked tab
             event.target.classList.add('active');
+
+            // Save current tab to localStorage
+            localStorage.setItem('activeTab', tabName);
         }
+
+        // Restore last active tab on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTab = localStorage.getItem('activeTab');
+            if (savedTab) {
+                // Check if the saved tab element exists (in case it's been hidden by admin)
+                const savedTabElement = document.getElementById(savedTab);
+                if (savedTabElement) {
+                    // Remove active class from all tabs
+                    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+
+                    // Activate saved tab
+                    savedTabElement.classList.add('active');
+
+                    // Find and activate the corresponding tab button
+                    const tabButtons = document.querySelectorAll('.tab');
+                    tabButtons.forEach(button => {
+                        if (button.getAttribute('onclick').includes(savedTab)) {
+                            button.classList.add('active');
+                        }
+                    });
+                }
+            }
+        });
 
         // Load command validation rules from server
         function loadCommandRules() {
@@ -3137,7 +3227,91 @@
                 overviewTab.classList.add('active');
                 document.getElementById('overview-content').classList.add('active');
             }
+
+            // Load WhoAmI data
+            loadWhoAmIData();
         });
+
+        // WhoAmI Functions
+        function loadWhoAmIData() {
+            const ipAddressElement = document.getElementById('userIpAddress');
+            const ipDetailsElement = document.getElementById('ipDetails');
+            const ipVersionElement = document.getElementById('ipVersion');
+            const ipTypeElement = document.getElementById('ipType');
+            const reverseDnsElement = document.getElementById('reverseDns');
+            const reverseDnsValueElement = document.getElementById('reverseDnsValue');
+
+            if (!ipAddressElement) return; // Tab not visible
+
+            // Fetch IP address from server
+            fetch('/api/whoami')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ip) {
+                        ipAddressElement.innerHTML = data.ip;
+
+                        // Determine IP version
+                        const isIPv6 = data.ip.includes(':');
+                        ipVersionElement.textContent = isIPv6 ? 'IPv6' : 'IPv4';
+
+                        // Determine IP type (private vs public)
+                        const isPrivate = isPrivateIP(data.ip);
+                        ipTypeElement.textContent = isPrivate ? 'Private' : 'Public';
+
+                        // Show details
+                        ipDetailsElement.style.display = 'block';
+
+                        // Show reverse DNS if available
+                        if (data.reverse_dns) {
+                            reverseDnsValueElement.textContent = data.reverse_dns;
+                            reverseDnsElement.style.display = 'block';
+                        }
+                    } else {
+                        ipAddressElement.innerHTML = '<span style="opacity: 0.6;">Unable to detect</span>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching IP:', error);
+                    ipAddressElement.innerHTML = '<span style="opacity: 0.6;">Error loading</span>';
+                });
+        }
+
+        function isPrivateIP(ip) {
+            // Check for IPv4 private ranges
+            if (ip.includes('.')) {
+                const parts = ip.split('.');
+                if (parts.length === 4) {
+                    const first = parseInt(parts[0]);
+                    const second = parseInt(parts[1]);
+
+                    // 10.0.0.0/8
+                    if (first === 10) return true;
+
+                    // 172.16.0.0/12
+                    if (first === 172 && second >= 16 && second <= 31) return true;
+
+                    // 192.168.0.0/16
+                    if (first === 192 && second === 168) return true;
+
+                    // 127.0.0.0/8 (localhost)
+                    if (first === 127) return true;
+                }
+            }
+
+            // Check for IPv6 private ranges
+            if (ip.includes(':')) {
+                // Link-local (fe80::/10)
+                if (ip.toLowerCase().startsWith('fe80:')) return true;
+
+                // Unique local (fc00::/7)
+                if (ip.toLowerCase().startsWith('fc') || ip.toLowerCase().startsWith('fd')) return true;
+
+                // Loopback (::1)
+                if (ip === '::1') return true;
+            }
+
+            return false;
+        }
     </script>
 </body>
 </html>

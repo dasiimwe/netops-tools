@@ -21,7 +21,43 @@ import time
 def index():
     """Index page with IP translator - no login required"""
     tooltip_theme = Settings.get_value('tooltip_theme', 'light')
-    return render_template('index.html', tooltip_theme=tooltip_theme)
+
+    # Get tool visibility settings
+    tool_visibility = {
+        'ip_translator': Settings.get_value('tool_ip_translator', True),
+        'command_runner': Settings.get_value('tool_command_runner', True),
+        'dns_lookup': Settings.get_value('tool_dns_lookup', True),
+        'traceroute': Settings.get_value('tool_traceroute', True),
+        'url_insights': Settings.get_value('tool_url_insights', True),
+        'whoami': Settings.get_value('tool_whoami', True)
+    }
+
+    return render_template('index.html', tooltip_theme=tooltip_theme, tool_visibility=tool_visibility)
+
+@main_bp.route('/api/whoami')
+def whoami():
+    """API endpoint to return user's IP address"""
+    # Get client IP address, handling proxies
+    if request.headers.get('X-Forwarded-For'):
+        client_ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        client_ip = request.headers.get('X-Real-IP')
+    else:
+        client_ip = request.remote_addr
+
+    response_data = {
+        'ip': client_ip
+    }
+
+    # Try to get reverse DNS
+    try:
+        reverse_dns = socket.gethostbyaddr(client_ip)[0]
+        response_data['reverse_dns'] = reverse_dns
+    except (socket.herror, socket.gaierror):
+        # Reverse DNS lookup failed
+        pass
+
+    return jsonify(response_data)
 
 @main_bp.route('/admin')
 @main_bp.route('/admin/')

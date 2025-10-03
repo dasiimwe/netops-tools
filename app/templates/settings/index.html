@@ -195,6 +195,94 @@
             </div>
         </div>
 
+        <!-- Tool Visibility Settings Card -->
+        <div class="card settings-card">
+            <div class="card-header">
+                Tool Visibility Settings
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.update') }}">
+                    <p class="text-muted mb-3" style="font-size: 0.875rem;">Control which tools are visible on the Netops Toolkit home page</p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_ip_translator" name="tool_ip_translator"
+                                       {% if settings.tool_ip_translator is not defined or settings.tool_ip_translator %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_ip_translator">
+                                    <strong>IP Translator</strong>
+                                </label>
+                                <div class="form-text">Network IP Address Translator</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_command_runner" name="tool_command_runner"
+                                       {% if settings.tool_command_runner is not defined or settings.tool_command_runner %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_command_runner">
+                                    <strong>Command Run Tool</strong>
+                                </label>
+                                <div class="form-text">Execute commands on network devices</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_dns_lookup" name="tool_dns_lookup"
+                                       {% if settings.tool_dns_lookup is not defined or settings.tool_dns_lookup %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_dns_lookup">
+                                    <strong>DNS Lookup</strong>
+                                </label>
+                                <div class="form-text">DNS query and resolution tool</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_traceroute" name="tool_traceroute"
+                                       {% if settings.tool_traceroute is not defined or settings.tool_traceroute %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_traceroute">
+                                    <strong>Traceroute</strong>
+                                </label>
+                                <div class="form-text">Network path tracing tool</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_url_insights" name="tool_url_insights"
+                                       {% if settings.tool_url_insights is not defined or settings.tool_url_insights %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_url_insights">
+                                    <strong>URL/App Insights</strong>
+                                </label>
+                                <div class="form-text">Browser-based URL diagnostics</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tool_whoami" name="tool_whoami"
+                                       {% if settings.tool_whoami is not defined or settings.tool_whoami %}checked{% endif %}>
+                                <label class="form-check-label" for="tool_whoami">
+                                    <strong>WhoAmI</strong>
+                                </label>
+                                <div class="form-text">Display user's IP address information</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-eye"></i> Update Tool Visibility
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <!-- Credential Settings Card -->
         <div class="card settings-card">
             <div class="card-header">
