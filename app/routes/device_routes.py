@@ -925,13 +925,19 @@ def download_template():
         'fw02.branch.com', '10.10.1.1', 'fortigate'
     ])
     writer.writerow([
+        'fw03.branch.com', '10.10.1.2', 'cisco_asa'
+    ])
+    writer.writerow([
         'sw02.company.com', '192.168.1.11', 'cisco_nxos'
+    ])
+    writer.writerow([
+        'sw03.company.com', '192.168.1.12', 'arista'
     ])
     writer.writerow([
         'rtr02.company.com', '192.168.1.21', 'cisco_iosxr'
     ])
     writer.writerow([
-        'sw03.company.com', '192.168.1.12', 'cisco_ios'
+        'rtr03.company.com', '192.168.1.22', 'juniper'
     ])
 
     output.seek(0)
@@ -1521,7 +1527,7 @@ def bulk_edit_vendor():
             return jsonify({'success': False, 'message': 'No vendor selected'}), 400
 
         # Validate vendor
-        valid_vendors = ['cisco_ios', 'cisco_nxos', 'cisco_iosxr', 'paloalto', 'fortigate']
+        valid_vendors = ['cisco_ios', 'cisco_nxos', 'cisco_iosxr', 'cisco_asa', 'arista', 'juniper', 'paloalto', 'fortigate']
         if vendor not in valid_vendors:
             return jsonify({'success': False, 'message': 'Invalid vendor'}), 400
 

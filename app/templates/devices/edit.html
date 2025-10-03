@@ -34,6 +34,9 @@
                                 <option value="cisco_ios" {% if device.vendor == 'cisco_ios' %}selected{% endif %}>Cisco IOS/IOS-XE</option>
                                 <option value="cisco_nxos" {% if device.vendor == 'cisco_nxos' %}selected{% endif %}>Cisco NXOS</option>
                                 <option value="cisco_iosxr" {% if device.vendor == 'cisco_iosxr' %}selected{% endif %}>Cisco IOS-XR</option>
+                                <option value="cisco_asa" {% if device.vendor == 'cisco_asa' %}selected{% endif %}>Cisco ASA</option>
+                                <option value="arista" {% if device.vendor == 'arista' %}selected{% endif %}>Arista EOS</option>
+                                <option value="juniper" {% if device.vendor == 'juniper' %}selected{% endif %}>Juniper JunOS</option>
                                 <option value="paloalto" {% if device.vendor == 'paloalto' %}selected{% endif %}>Palo Alto Networks</option>
                                 <option value="fortigate" {% if device.vendor == 'fortigate' %}selected{% endif %}>FortiGate</option>
                             </select>
