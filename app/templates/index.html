@@ -374,7 +374,8 @@
                 </div>
 
                 <div style="margin-top: 15px;">
-                    <button onclick="performTraceroute()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Run Traceroute</button>
+                    <button id="runTracerouteButton" onclick="performTraceroute()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Run Traceroute</button>
+                    <button id="stopTracerouteButton" onclick="stopTraceroute()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; cursor: pointer; display: none;">Stop</button>
                     <div id="tracerouteProgress" style="display: none; margin-top: 10px;">
                         <div id="tracerouteProgressText">Running traceroutes... Please wait.</div>
                         <div id="tracerouteProgressDetail" style="margin-top: 5px; font-size: 12px; color: #666;"></div>
@@ -388,6 +389,7 @@
                 <label>
                     <strong>Traceroute Results:</strong>
                     <button id="copyTracerouteButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyTracerouteResults()">Copy</button>
+                    <button id="translateTracerouteButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer; background: #007bff; color: white; border: none;" onclick="translateTracerouteResults()">Translate</button>
                     <button id="downloadTracerouteButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer; background: #28a745; color: white; border: none;" onclick="downloadTracerouteResults()">Download</button>
                 </label>
                 <br>
@@ -401,7 +403,7 @@
 
 
     <!-- Tooltip container -->
-    <div id="tooltip" style="position: absolute; background: #333; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 1000;"></div>
+    <div id="tooltip" style="position: absolute; display: none; z-index: 1000;"></div>
 
     <!-- Save Device List Modal -->
     <div id="saveDeviceModal" class="modal">
@@ -1317,7 +1319,6 @@
 
             tracerouteTargetsTextarea.value = targetList.join('\n');
             closeLoadTracerouteTargetsModal();
-            alert(`Traceroute target list "${listName}" loaded successfully!`);
         }
 
         function deleteTracerouteTargetList(listName) {
@@ -1614,17 +1615,8 @@
 
         function confirmLoadDnsServerList(listName, serverList) {
             const dnsServersTextarea = document.getElementById('dnsServers');
-            const currentServers = dnsServersTextarea.value.trim();
-
-            if (currentServers) {
-                if (!confirm(`This will replace your current DNS server list. Continue?`)) {
-                    return;
-                }
-            }
-
             dnsServersTextarea.value = serverList.join('\n');
             closeLoadDnsServerModal();
-            alert(`DNS server list "${listName}" loaded successfully!`);
         }
 
         function deleteDnsServerList(listName) {
@@ -2024,6 +2016,10 @@
             currentTracerouteData = {};
             tracerouteResultsData = {};
 
+            // Show stop button, hide run button
+            document.getElementById('runTracerouteButton').style.display = 'none';
+            document.getElementById('stopTracerouteButton').style.display = 'inline-block';
+
             tracerouteProgress.style.display = 'block';
             tracerouteProgressDetail.textContent = `Starting traceroutes to ${targets.length} targets...`;
             tracerouteResults.innerHTML = '';
@@ -2060,7 +2056,30 @@
                 console.error('SSE error:', error);
                 tracerouteEventSource.close();
                 tracerouteProgress.style.display = 'none';
+                // Show run button, hide stop button
+                document.getElementById('runTracerouteButton').style.display = 'inline-block';
+                document.getElementById('stopTracerouteButton').style.display = 'none';
             };
+        }
+
+        function stopTraceroute() {
+            if (tracerouteEventSource) {
+                tracerouteEventSource.close();
+                tracerouteEventSource = null;
+            }
+
+            const tracerouteProgress = document.getElementById('tracerouteProgress');
+            const tracerouteProgressDetail = document.getElementById('tracerouteProgressDetail');
+
+            tracerouteProgressDetail.textContent = 'Traceroute stopped by user.';
+
+            setTimeout(() => {
+                tracerouteProgress.style.display = 'none';
+            }, 1500);
+
+            // Show run button, hide stop button
+            document.getElementById('runTracerouteButton').style.display = 'inline-block';
+            document.getElementById('stopTracerouteButton').style.display = 'none';
         }
 
         function handleTracerouteUpdate(data, translateIPs) {
@@ -2091,6 +2110,7 @@
                         const hopsContainer = document.createElement('pre');
                         hopsContainer.id = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
                         hopsContainer.style.cssText = 'margin: 0; white-space: pre-wrap; font-family: monospace;';
+                        hopsContainer.textContent = '\n';  // Start with newline so first hop appears on new line
                         targetDiv.appendChild(hopsContainer);
 
                         tracerouteResults.appendChild(targetDiv);
@@ -2101,9 +2121,9 @@
                     // Find the target's div and add hop
                     const targetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const hopsContainer = document.getElementById(targetId);
+                    const hop = data.hop;
 
                     if (hopsContainer) {
-                        const hop = data.hop;
                         let hopLine = `${hop.hop_num.toString().padStart(2)}  `;
 
                         if (hop.probes && hop.probes.length > 0) {
@@ -2174,12 +2194,7 @@
                     }
                     break;
 
-                case 'debug':
-                    console.log(`DEBUG [${data.target}]: Raw line: "${data.raw_line}"`);
-                    break;
-
                 case 'parse_fail':
-                    console.log(`PARSE FAIL [${data.target}]: Could not parse line: "${data.line}"`);
                     // Display the unparsed line as a fallback in target's div
                     const parseFailTargetId = `hops-${data.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const parseFailHopsContainer = document.getElementById(parseFailTargetId);
@@ -2191,6 +2206,9 @@
                 case 'all_complete':
                     document.getElementById('tracerouteProgress').style.display = 'none';
                     tracerouteEventSource.close();
+                    // Show run button, hide stop button
+                    document.getElementById('runTracerouteButton').style.display = 'inline-block';
+                    document.getElementById('stopTracerouteButton').style.display = 'none';
                     break;
             }
 
@@ -2286,6 +2304,39 @@
                 console.error('Failed to copy text: ', err);
                 alert('Failed to copy to clipboard');
             });
+        }
+
+        function translateTracerouteResults() {
+            const tracerouteResults = document.getElementById('tracerouteResults').textContent;
+
+            if (!tracerouteResults || tracerouteResults.trim() === '' || tracerouteResults.includes('Traceroute results will appear here')) {
+                alert('No traceroute results to translate');
+                return;
+            }
+
+            // Switch to IP Translator tab
+            showTab('ip-translator');
+
+            // Populate the IP translator input with traceroute results
+            const ipTranslatorInput = document.getElementById('inputText');
+            ipTranslatorInput.value = tracerouteResults;
+
+            // Scroll to the top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Automatically trigger the translation
+            translateText();
+
+            // Visual feedback on the translate button
+            const translateButton = document.getElementById('translateTracerouteButton');
+            const originalText = translateButton.textContent;
+            translateButton.textContent = 'Translated!';
+            translateButton.style.backgroundColor = '#0056b3';
+
+            setTimeout(() => {
+                translateButton.textContent = originalText;
+                translateButton.style.backgroundColor = '#007bff';
+            }, 1500);
         }
 
         function downloadTracerouteResults() {
@@ -2405,36 +2456,144 @@
 
             enhancedIPs.forEach(element => {
                 element.addEventListener('mouseenter', showTooltip);
-                element.addEventListener('mouseleave', hideTooltip);
+                element.addEventListener('mouseleave', scheduleHideTooltip);
                 element.addEventListener('click', handleIPClick);
             });
         }
 
+        let tooltipHideTimer = null;
+
         function showTooltip(event) {
+            // Clear any pending hide timer
+            if (tooltipHideTimer) {
+                clearTimeout(tooltipHideTimer);
+                tooltipHideTimer = null;
+            }
+
             const element = event.target;
             const tooltipDataStr = element.getAttribute('data-tooltip').replace(/&quot;/g, '"');
             const tooltipData = JSON.parse(tooltipDataStr);
             const mgmtIP = element.getAttribute('data-mgmt-ip');
 
+            // Get theme from backend (passed in template)
+            const theme = '{{ tooltip_theme }}' || 'light';
+
+            // Define theme colors
+            const themes = {
+                light: {
+                    bg: '#ffffff',
+                    text: '#333333',
+                    border: '#d4d4d4',
+                    shadow: 'rgba(0,0,0,0.16)',
+                    divider: '#e5e5e5',
+                    hostname: '#0451a5',
+                    mgmtIp: '#a31515',
+                    label: '#001080',
+                    value: '#333333',
+                    status: '#098658',
+                    link: '#0066cc',
+                    linkHoverBg: '#0066cc',
+                    linkHoverText: '#ffffff',
+                    separator: '#999999'
+                },
+                dark: {
+                    bg: '#1e1e1e',
+                    text: '#cccccc',
+                    border: '#454545',
+                    shadow: 'rgba(0,0,0,0.66)',
+                    divider: '#2d2d30',
+                    hostname: '#4ec9b0',
+                    mgmtIp: '#ce9178',
+                    label: '#9cdcfe',
+                    value: '#cccccc',
+                    status: '#4ec9b0',
+                    link: '#3794ff',
+                    linkHoverBg: '#3794ff',
+                    linkHoverText: '#ffffff',
+                    separator: '#808080'
+                }
+            };
+
+            const colors = themes[theme];
+
             const tooltipContent = `
-                <div>
-                    <strong>${tooltipData.hostname}</strong><br>
-                    <strong>Interface:</strong> ${tooltipData.interface_name}<br>
-                    <strong>Description:</strong> ${tooltipData.interface_description}<br>
-                    <strong>Management IP:</strong> ${mgmtIP}<br>
-                    <strong>Vendor:</strong> ${tooltipData.device_vendor}<br>
-                    <strong>Status:</strong> ${tooltipData.interface_status}<br>
-                    <a href="ssh://${mgmtIP}" onclick="event.stopPropagation();">SSH to ${mgmtIP}</a>
+                <div style="background: ${colors.bg};
+                            color: ${colors.text};
+                            padding: 12px;
+                            border-radius: 4px;
+                            box-shadow: 0 0 0 1px ${colors.border}, 0 4px 11px ${colors.shadow};
+                            min-width: 300px;
+                            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                            font-size: 13px;
+                            line-height: 1.5;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid ${colors.divider};">
+                        <div>
+                            <span style="color: ${colors.hostname}; font-weight: 600;">${tooltipData.hostname}</span>
+                            <span style="color: ${colors.separator}; margin: 0 6px;">•</span>
+                            <span style="color: ${colors.mgmtIp};">${mgmtIP}</span>
+                        </div>
+                        <a href="ssh://${mgmtIP}"
+                           onclick="event.stopPropagation();"
+                           style="color: ${colors.link};
+                                  text-decoration: none;
+                                  font-size: 11px;
+                                  padding: 3px 8px;
+                                  border: 1px solid ${colors.link};
+                                  border-radius: 3px;
+                                  background: transparent;
+                                  transition: all 0.2s;
+                                  white-space: nowrap;"
+                           onmouseover="this.style.background='${colors.linkHoverBg}'; this.style.color='${colors.linkHoverText}';"
+                           onmouseout="this.style.background='transparent'; this.style.color='${colors.link}';">
+                            SSH
+                        </a>
+                    </div>
+                    <div style="font-size: 12px;">
+                        <div style="margin-bottom: 4px;">
+                            <span style="color: ${colors.label};">Interface:</span>
+                            <span style="color: ${colors.value}; margin-left: 4px;">${tooltipData.interface_name}</span>
+                        </div>
+                        <div style="margin-bottom: 4px;">
+                            <span style="color: ${colors.label};">Description:</span>
+                            <span style="color: ${colors.value}; margin-left: 4px;">${tooltipData.interface_description}</span>
+                        </div>
+                        <div style="margin-bottom: 4px;">
+                            <span style="color: ${colors.label};">Vendor:</span>
+                            <span style="color: ${colors.value}; margin-left: 4px;">${tooltipData.device_vendor}</span>
+                        </div>
+                        <div>
+                            <span style="color: ${colors.label};">Status:</span>
+                            <span style="color: ${colors.status}; margin-left: 4px;">${tooltipData.interface_status}</span>
+                        </div>
+                    </div>
                 </div>
             `;
 
             tooltip.innerHTML = tooltipContent;
             tooltip.style.display = 'block';
 
+            // Add hover listeners to tooltip itself
+            tooltip.addEventListener('mouseenter', cancelHideTooltip);
+            tooltip.addEventListener('mouseleave', scheduleHideTooltip);
+
             // Position tooltip
             const rect = element.getBoundingClientRect();
             tooltip.style.left = rect.left + 'px';
             tooltip.style.top = (rect.bottom + 10) + 'px';
+        }
+
+        function scheduleHideTooltip() {
+            // Delay hiding to allow moving mouse to tooltip
+            tooltipHideTimer = setTimeout(() => {
+                hideTooltip();
+            }, 200);
+        }
+
+        function cancelHideTooltip() {
+            if (tooltipHideTimer) {
+                clearTimeout(tooltipHideTimer);
+                tooltipHideTimer = null;
+            }
         }
 
         function hideTooltip() {

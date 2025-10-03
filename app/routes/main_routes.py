@@ -20,7 +20,8 @@ import time
 @main_bp.route('/')
 def index():
     """Index page with IP translator - no login required"""
-    return render_template('index.html')
+    tooltip_theme = Settings.get_value('tooltip_theme', 'light')
+    return render_template('index.html', tooltip_theme=tooltip_theme)
 
 @main_bp.route('/admin')
 @main_bp.route('/admin/')
@@ -891,7 +892,7 @@ def perform_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_
     except Exception as e:
         return {'error': str(e)}
 
-def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_size=60, resolve_hostnames=True, translate_ips=True):
+def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=3, packet_size=60, resolve_hostnames=True, translate_ips=True, app=None):
     """Perform traceroute and yield results hop by hop"""
     try:
         system = platform.system()
@@ -951,13 +952,6 @@ def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=
             if not line:
                 continue
 
-            # Debug: yield raw line for debugging
-            yield json.dumps({
-                'type': 'debug',
-                'target': target,
-                'raw_line': line
-            }) + '\n'
-
             # Skip header lines
             if 'traceroute to' in line.lower() or 'tracing route' in line.lower():
                 continue
@@ -971,7 +965,7 @@ def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=
                 if translate_ips:
                     for probe in hop_data.get('probes', []):
                         if probe.get('success') and probe.get('ip'):
-                            translated = translate_traceroute_ip(probe['ip'])
+                            translated = translate_traceroute_ip(probe['ip'], app)
                             if translated:
                                 probe['translated_info'] = translated
 
@@ -982,7 +976,7 @@ def perform_streaming_traceroute(target, max_hops=30, timeout=3, probes_per_hop=
                     'hop': hop_data
                 }) + '\n'
             else:
-                # Debug: yield parse failure info
+                # Yield parse failure info for fallback display
                 yield json.dumps({
                     'type': 'parse_fail',
                     'target': target,
@@ -1084,28 +1078,51 @@ def parse_hop_line(line, system):
 
     return hop_data if hop_data['probes'] else None
 
-def translate_traceroute_ip(ip_address):
+def translate_traceroute_ip(ip_address, app=None):
     """Translate IP to hostname and interface info from database"""
     try:
-        # Look for interface with this IP
-        interface = Interface.query.join(Device).filter(
-            or_(
-                Interface.ipv4_address.like(f'{ip_address}/%'),
-                Interface.ipv4_address == ip_address
-            )
-        ).first()
+        # If app context is provided, use it (for threaded execution)
+        if app:
+            with app.app_context():
+                # Look for interface with this IP
+                interface = Interface.query.join(Device).filter(
+                    or_(
+                        Interface.ipv4_address.like(f'{ip_address}/%'),
+                        Interface.ipv4_address == ip_address
+                    )
+                ).first()
 
-        if interface:
-            device = interface.device
-            # Shorten interface name
-            interface_short = interface.name.lower()
-            match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
-            if match:
-                interface_short = match.group(1).lower() + match.group(2)
-            else:
-                interface_short = interface.name[:2].lower()
+                if interface:
+                    device = interface.device
+                    # Shorten interface name
+                    interface_short = interface.name.lower()
+                    match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+                    if match:
+                        interface_short = match.group(1).lower() + match.group(2)
+                    else:
+                        interface_short = interface.name[:2].lower()
 
-            return f"{device.hostname}-{interface_short}"
+                    return f"{device.hostname}-{interface_short}"
+        else:
+            # Look for interface with this IP (when already in app context)
+            interface = Interface.query.join(Device).filter(
+                or_(
+                    Interface.ipv4_address.like(f'{ip_address}/%'),
+                    Interface.ipv4_address == ip_address
+                )
+            ).first()
+
+            if interface:
+                device = interface.device
+                # Shorten interface name
+                interface_short = interface.name.lower()
+                match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+                if match:
+                    interface_short = match.group(1).lower() + match.group(2)
+                else:
+                    interface_short = interface.name[:2].lower()
+
+                return f"{device.hostname}-{interface_short}"
     except Exception:
         pass
 
@@ -1125,6 +1142,9 @@ def traceroute_stream():
     def generate():
         import queue
         import threading
+
+        # Get Flask app instance for threaded DB access
+        app = current_app._get_current_object()
 
         # Set SSE headers and send target list
         valid_targets = [t.strip() for t in targets if t.strip()]
@@ -1164,7 +1184,7 @@ def traceroute_stream():
             try:
                 for result in perform_streaming_traceroute(
                     target, max_hops, timeout, probes_per_hop,
-                    packet_size, resolve_hostnames, translate_ips
+                    packet_size, resolve_hostnames, translate_ips, app
                 ):
                     result_queue.put(result)
                 completed_targets.add(target)

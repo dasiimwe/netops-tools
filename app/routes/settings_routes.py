@@ -33,6 +33,8 @@ def index():
         'password_require_special': Settings.get_value('password_require_special', True),
         # Interface collection progress bar
         'show_interface_progress': Settings.get_value('show_interface_progress', True),
+        # Tooltip theme
+        'tooltip_theme': Settings.get_value('tooltip_theme', 'light'),
         # Default credential pool
         'default_credential_pool_id': Settings.get_value('default_credential_pool_id', None)
     }
@@ -144,6 +146,12 @@ def update():
                       request.form.get('show_interface_progress') == 'on',
                       'bool',
                       'Show detailed progress bar during interface collection')
+
+    # Update tooltip theme setting
+    Settings.set_value('tooltip_theme',
+                      request.form.get('tooltip_theme', 'light'),
+                      'string',
+                      'IP Translator tooltip color theme')
 
     # Update default credential pool setting
     default_credential_pool_id = request.form.get('default_credential_pool_id')

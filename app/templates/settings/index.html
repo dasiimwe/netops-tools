@@ -85,6 +85,15 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="tooltip_theme" class="form-label"><strong>IP Translator Tooltip Theme</strong></label>
+                        <select class="form-select" id="tooltip_theme" name="tooltip_theme">
+                            <option value="light" {% if settings.tooltip_theme == 'light' or not settings.tooltip_theme %}selected{% endif %}>VS Code Light</option>
+                            <option value="dark" {% if settings.tooltip_theme == 'dark' %}selected{% endif %}>VS Code Dark+</option>
+                        </select>
+                        <div class="form-text">Choose the color theme for IP address hover tooltips in the IP Translator tool</div>
+                    </div>
+
                     <button type="submit" class="btn btn-info">
                         <i class="bi bi-display"></i> Update UI Settings
                     </button>
