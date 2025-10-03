@@ -4,6 +4,56 @@
 
 {% block extra_css %}
 <style>
+    /* Settings Tabs */
+    .settings-tabs {
+        display: flex;
+        border-bottom: 2px solid #dee2e6;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .settings-tab {
+        padding: 12px 24px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        color: #6c757d;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+    }
+
+    .settings-tab:hover {
+        color: #0d6efd;
+        background: rgba(13, 110, 253, 0.05);
+    }
+
+    .settings-tab.active {
+        color: #0d6efd;
+        border-bottom-color: #0d6efd;
+        background: rgba(13, 110, 253, 0.05);
+    }
+
+    .settings-tab i {
+        margin-right: 6px;
+    }
+
+    .tab-content-wrapper {
+        display: none;
+    }
+
+    .tab-content-wrapper.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Cards */
     .settings-card {
         border-radius: 0.75rem;
@@ -28,7 +78,7 @@
     }
 
     .settings-card .card-body {
-        padding: 0.85rem;
+        padding: 1.25rem;
     }
 
     /* Form Controls */
@@ -50,6 +100,7 @@
     .settings-card .form-label {
         font-size: 0.8125rem;
         margin-bottom: 0.25rem;
+        font-weight: 500;
     }
 
     .settings-card .form-text {
@@ -61,7 +112,7 @@
         border-radius: 0.375rem;
         font-weight: 500;
         font-size: 0.875rem;
-        padding: 0.35rem 0.75rem;
+        padding: 0.5rem 1rem;
         transition: all 0.2s ease;
     }
 
@@ -85,7 +136,7 @@
         font-size: 0.875rem;
     }
 
-    /* Nav Tabs */
+    /* Nav Tabs (for command rules sub-tabs) */
     .nav-tabs .nav-link {
         font-size: 0.875rem;
         padding: 0.5rem 0.75rem;
@@ -101,484 +152,540 @@
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <div class="card settings-card">
-            <div class="card-header">
-                Device Connection Settings
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="connection_timeout" class="form-label">Connection Timeout (seconds)</label>
-                            <input type="number" class="form-control" id="connection_timeout" name="connection_timeout" 
-                                   value="{{ settings.connection_timeout }}" min="1" max="300">
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="command_timeout" class="form-label">Command Timeout (seconds)</label>
-                            <input type="number" class="form-control" id="command_timeout" name="command_timeout" 
-                                   value="{{ settings.command_timeout }}" min="1" max="300">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="retry_enabled" name="retry_enabled" 
-                                       {% if settings.retry_enabled %}checked{% endif %}>
-                                <label class="form-check-label" for="retry_enabled">
-                                    Enable Connection Retry
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="retry_count" class="form-label">Retry Count</label>
-                            <input type="number" class="form-control" id="retry_count" name="retry_count" 
-                                   value="{{ settings.retry_count }}" min="1" max="10">
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="retry_delay" class="form-label">Retry Delay (seconds)</label>
-                            <input type="number" class="form-control" id="retry_delay" name="retry_delay" 
-                                   value="{{ settings.retry_delay }}" min="1" max="60">
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="max_concurrent" class="form-label">Max Concurrent Connections</label>
-                        <input type="number" class="form-control" id="max_concurrent" name="max_concurrent" 
-                               value="{{ settings.max_concurrent }}" min="1" max="50">
-                        <div class="form-text">Maximum number of simultaneous device connections for bulk operations</div>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle"></i> Update Settings
-                    </button>
-                </form>
-            </div>
-        </div>
+<!-- Settings Tabs -->
+<div class="settings-tabs">
+    <button class="settings-tab active" onclick="showSettingsTab('connection')">
+        <i class="bi bi-hdd-network"></i> Connection
+    </button>
+    <button class="settings-tab" onclick="showSettingsTab('ui')">
+        <i class="bi bi-layout-wtf"></i> User Interface
+    </button>
+    <button class="settings-tab" onclick="showSettingsTab('security')">
+        <i class="bi bi-shield-lock"></i> Security
+    </button>
+    <button class="settings-tab" onclick="showSettingsTab('credentials')">
+        <i class="bi bi-key"></i> Credentials
+    </button>
+    <button class="settings-tab" onclick="showSettingsTab('command-rules')">
+        <i class="bi bi-terminal"></i> Command Rules
+    </button>
+</div>
 
-        <!-- User Interface Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                User Interface Settings
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <div class="mb-3">
+<!-- Connection Settings Tab -->
+<div id="connection-tab" class="tab-content-wrapper active">
+    <div class="card settings-card">
+        <div class="card-header">
+            Device Connection Settings
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="connection">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="connection_timeout" class="form-label">Connection Timeout (seconds)</label>
+                        <input type="number" class="form-control" id="connection_timeout" name="connection_timeout"
+                               value="{{ settings.connection_timeout }}" min="1" max="300">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="command_timeout" class="form-label">Command Timeout (seconds)</label>
+                        <input type="number" class="form-control" id="command_timeout" name="command_timeout"
+                               value="{{ settings.command_timeout }}" min="1" max="300">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="show_interface_progress" name="show_interface_progress"
-                                   {% if settings.show_interface_progress %}checked{% endif %}>
-                            <label class="form-check-label" for="show_interface_progress">
-                                <strong>Show Interface Collection Progress</strong>
+                            <input class="form-check-input" type="checkbox" id="retry_enabled" name="retry_enabled"
+                                   {% if settings.retry_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="retry_enabled">
+                                Enable Connection Retry
                             </label>
-                            <div class="form-text">Display detailed progress bar with real-time command execution status during interface collection</div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="tooltip_theme" class="form-label"><strong>IP Translator Tooltip Theme</strong></label>
-                        <select class="form-select" id="tooltip_theme" name="tooltip_theme">
-                            <option value="light" {% if settings.tooltip_theme == 'light' or not settings.tooltip_theme %}selected{% endif %}>VS Code Light</option>
-                            <option value="dark" {% if settings.tooltip_theme == 'dark' %}selected{% endif %}>VS Code Dark+</option>
-                        </select>
-                        <div class="form-text">Choose the color theme for IP address hover tooltips in the IP Translator tool</div>
+                    <div class="col-md-4 mb-3">
+                        <label for="retry_count" class="form-label">Retry Count</label>
+                        <input type="number" class="form-control" id="retry_count" name="retry_count"
+                               value="{{ settings.retry_count }}" min="1" max="10">
                     </div>
 
-                    <button type="submit" class="btn btn-info">
-                        <i class="bi bi-display"></i> Update UI Settings
-                    </button>
-                </form>
-            </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="retry_delay" class="form-label">Retry Delay (seconds)</label>
+                        <input type="number" class="form-control" id="retry_delay" name="retry_delay"
+                               value="{{ settings.retry_delay }}" min="1" max="60">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="max_concurrent" class="form-label">Max Concurrent Connections</label>
+                    <input type="number" class="form-control" id="max_concurrent" name="max_concurrent"
+                           value="{{ settings.max_concurrent }}" min="1" max="50">
+                    <div class="form-text">Maximum number of simultaneous device connections for bulk operations</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Update Connection Settings
+                </button>
+            </form>
         </div>
+    </div>
+</div>
 
-        <!-- Tool Visibility Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                Tool Visibility Settings
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <p class="text-muted mb-3" style="font-size: 0.875rem;">Control which tools are visible on the Netops Toolkit home page</p>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_ip_translator" name="tool_ip_translator"
-                                       {% if settings.tool_ip_translator is not defined or settings.tool_ip_translator %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_ip_translator">
-                                    <strong>IP Translator</strong>
-                                </label>
-                                <div class="form-text">Network IP Address Translator</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_command_runner" name="tool_command_runner"
-                                       {% if settings.tool_command_runner is not defined or settings.tool_command_runner %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_command_runner">
-                                    <strong>Command Run Tool</strong>
-                                </label>
-                                <div class="form-text">Execute commands on network devices</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_dns_lookup" name="tool_dns_lookup"
-                                       {% if settings.tool_dns_lookup is not defined or settings.tool_dns_lookup %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_dns_lookup">
-                                    <strong>DNS Lookup</strong>
-                                </label>
-                                <div class="form-text">DNS query and resolution tool</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_traceroute" name="tool_traceroute"
-                                       {% if settings.tool_traceroute is not defined or settings.tool_traceroute %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_traceroute">
-                                    <strong>Traceroute</strong>
-                                </label>
-                                <div class="form-text">Network path tracing tool</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_url_insights" name="tool_url_insights"
-                                       {% if settings.tool_url_insights is not defined or settings.tool_url_insights %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_url_insights">
-                                    <strong>URL/App Insights</strong>
-                                </label>
-                                <div class="form-text">Browser-based URL diagnostics</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tool_whoami" name="tool_whoami"
-                                       {% if settings.tool_whoami is not defined or settings.tool_whoami %}checked{% endif %}>
-                                <label class="form-check-label" for="tool_whoami">
-                                    <strong>WhoAmI</strong>
-                                </label>
-                                <div class="form-text">Display user's IP address information</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-success">
-                        <i class="bi bi-eye"></i> Update Tool Visibility
-                    </button>
-                </form>
-            </div>
+<!-- User Interface Tab -->
+<div id="ui-tab" class="tab-content-wrapper">
+    <div class="card settings-card">
+        <div class="card-header">
+            User Interface Settings
         </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="ui_settings">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show_interface_progress" name="show_interface_progress"
+                               {% if settings.show_interface_progress %}checked{% endif %}>
+                        <label class="form-check-label" for="show_interface_progress">
+                            <strong>Show Interface Collection Progress</strong>
+                        </label>
+                        <div class="form-text">Display detailed progress bar with real-time command execution status during interface collection</div>
+                    </div>
+                </div>
 
-        <!-- Credential Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                Default Credentials
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <div class="mb-3">
-                        <label for="default_credential_pool_id" class="form-label">Default Credential Pool</label>
-                        <select class="form-select" id="default_credential_pool_id" name="default_credential_pool_id">
-                            <option value="">-- No default pool --</option>
-                            {% for pool in available_credential_pools %}
-                            <option value="{{ pool.id }}"
-                                    {% if settings.default_credential_pool_id == pool.id %}selected{% endif %}>
-                                {{ pool.name }} ({{ pool.credentials|length }} credentials)
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">
-                            Default credential pool used when no specific credentials are assigned to a device.
-                            Credentials in the pool will be tried in priority order.
+                <div class="mb-3">
+                    <label for="tooltip_theme" class="form-label"><strong>IP Translator Tooltip Theme</strong></label>
+                    <select class="form-select" id="tooltip_theme" name="tooltip_theme">
+                        <option value="light" {% if settings.tooltip_theme == 'light' or not settings.tooltip_theme %}selected{% endif %}>VS Code Light</option>
+                        <option value="dark" {% if settings.tooltip_theme == 'dark' %}selected{% endif %}>VS Code Dark+</option>
+                    </select>
+                    <div class="form-text">Choose the color theme for IP address hover tooltips in the IP Translator tool</div>
+                </div>
+
+                <button type="submit" class="btn btn-info">
+                    <i class="bi bi-display"></i> Update UI Settings
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card settings-card">
+        <div class="card-header">
+            Tool Visibility Settings
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="tool_visibility">
+                <p class="text-muted mb-3" style="font-size: 0.875rem;">Control which tools are visible on the Netops Toolkit home page</p>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_ip_translator" name="tool_ip_translator"
+                                   {% if settings.tool_ip_translator is not defined or settings.tool_ip_translator %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_ip_translator">
+                                <strong>IP Translator</strong>
+                            </label>
+                            <div class="form-text">Network IP Address Translator</div>
                         </div>
                     </div>
 
-                    {% if current_default_pool %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i>
-                        <strong>Current Default Pool:</strong> {{ current_default_pool.name }}
-                        <br>
-                        <small class="text-muted">
-                            Contains {{ current_default_pool.credentials|length }} credentials:
-                            {% for cred in current_default_pool.get_credentials_list()[:3] %}
-                                {{ cred.name }}{% if not loop.last %}, {% endif %}
-                            {% endfor %}
-                            {% if current_default_pool.credentials|length > 3 %}
-                                and {{ current_default_pool.credentials|length - 3 }} more
-                            {% endif %}
-                        </small>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_command_runner" name="tool_command_runner"
+                                   {% if settings.tool_command_runner is not defined or settings.tool_command_runner %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_command_runner">
+                                <strong>Command Run Tool</strong>
+                            </label>
+                            <div class="form-text">Execute commands on network devices</div>
+                        </div>
                     </div>
-                    {% endif %}
+                </div>
 
-                    <button type="submit" class="btn btn-success">
-                        <i class="bi bi-key"></i> Update Default Credentials
-                    </button>
-                </form>
-            </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_dns_lookup" name="tool_dns_lookup"
+                                   {% if settings.tool_dns_lookup is not defined or settings.tool_dns_lookup %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_dns_lookup">
+                                <strong>DNS Lookup</strong>
+                            </label>
+                            <div class="form-text">DNS query and resolution tool</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_traceroute" name="tool_traceroute"
+                                   {% if settings.tool_traceroute is not defined or settings.tool_traceroute %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_traceroute">
+                                <strong>Traceroute</strong>
+                            </label>
+                            <div class="form-text">Network path tracing tool</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_url_insights" name="tool_url_insights"
+                                   {% if settings.tool_url_insights is not defined or settings.tool_url_insights %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_url_insights">
+                                <strong>URL/App Insights</strong>
+                            </label>
+                            <div class="form-text">Browser-based URL diagnostics</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_whoami" name="tool_whoami"
+                                   {% if settings.tool_whoami is not defined or settings.tool_whoami %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_whoami">
+                                <strong>WhoAmI</strong>
+                            </label>
+                            <div class="form-text">Display user's IP address information</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-eye"></i> Update Tool Visibility
+                </button>
+            </form>
         </div>
+    </div>
+</div>
 
-        <!-- Command Validation Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                Command Validation Rules
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info mb-3">
+<!-- Security Tab -->
+<div id="security-tab" class="tab-content-wrapper">
+    <div class="card settings-card">
+        <div class="card-header">
+            Password Complexity Requirements
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="password">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="password_min_length" name="password_min_length"
+                               {% if settings.password_min_length %}checked{% endif %}>
+                        <label class="form-check-label" for="password_min_length">
+                            <strong>Minimum 8 characters</strong>
+                        </label>
+                        <div class="form-text">Require passwords to be at least 8 characters long</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="password_require_uppercase" name="password_require_uppercase"
+                               {% if settings.password_require_uppercase %}checked{% endif %}>
+                        <label class="form-check-label" for="password_require_uppercase">
+                            <strong>Uppercase letter (A-Z)</strong>
+                        </label>
+                        <div class="form-text">Require at least one uppercase letter</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="password_require_lowercase" name="password_require_lowercase"
+                               {% if settings.password_require_lowercase %}checked{% endif %}>
+                        <label class="form-check-label" for="password_require_lowercase">
+                            <strong>Lowercase letter (a-z)</strong>
+                        </label>
+                        <div class="form-text">Require at least one lowercase letter</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="password_require_number" name="password_require_number"
+                               {% if settings.password_require_number %}checked{% endif %}>
+                        <label class="form-check-label" for="password_require_number">
+                            <strong>Number (0-9)</strong>
+                        </label>
+                        <div class="form-text">Require at least one number</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="password_require_special" name="password_require_special"
+                               {% if settings.password_require_special %}checked{% endif %}>
+                        <label class="form-check-label" for="password_require_special">
+                            <strong>Special character</strong>
+                        </label>
+                        <div class="form-text">Require at least one special character (!@#$%^&* etc.)</div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-shield-check"></i> Update Password Rules
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card settings-card">
+        <div class="card-header">
+            TACACS+ Authentication
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="tacacs">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="tacacs_enabled" name="tacacs_enabled"
+                               {% if settings.tacacs_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="tacacs_enabled">
+                            Enable TACACS+ Authentication
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="tacacs_server" class="form-label">TACACS+ Server</label>
+                    <input type="text" class="form-control" id="tacacs_server" name="tacacs_server"
+                           value="{{ settings.tacacs_server or '' }}" placeholder="tacacs.example.com">
+                    <div class="form-text">IP address or hostname of the TACACS+ server</div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="tacacs_port" class="form-label">Port</label>
+                        <input type="number" class="form-control" id="tacacs_port" name="tacacs_port"
+                               value="{{ settings.tacacs_port or 49 }}" min="1" max="65535">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="tacacs_timeout" class="form-label">Timeout (seconds)</label>
+                        <input type="number" class="form-control" id="tacacs_timeout" name="tacacs_timeout"
+                               value="{{ settings.tacacs_timeout or 10 }}" min="1" max="60">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="tacacs_secret" class="form-label">Shared Secret</label>
+                    <input type="password" class="form-control" id="tacacs_secret" name="tacacs_secret"
+                           value="{{ settings.tacacs_secret or '' }}" placeholder="Enter shared secret">
+                    <div class="form-text">Shared secret key for TACACS+ authentication</div>
+                </div>
+
+                <button type="submit" class="btn btn-secondary">
+                    <i class="bi bi-check-circle"></i> Update TACACS+
+                </button>
+
+                <button type="button" class="btn btn-outline-info" onclick="testTacacs()">
+                    <i class="bi bi-wifi"></i> Test Connection
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Credentials Tab -->
+<div id="credentials-tab" class="tab-content-wrapper">
+    <div class="card settings-card">
+        <div class="card-header">
+            Default Credentials
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('settings.update') }}">
+                <input type="hidden" name="form_id" value="credentials">
+                <div class="mb-3">
+                    <label for="default_credential_pool_id" class="form-label">Default Credential Pool</label>
+                    <select class="form-select" id="default_credential_pool_id" name="default_credential_pool_id">
+                        <option value="">-- No default pool --</option>
+                        {% for pool in available_credential_pools %}
+                        <option value="{{ pool.id }}"
+                                {% if settings.default_credential_pool_id == pool.id %}selected{% endif %}>
+                            {{ pool.name }} ({{ pool.credentials|length }} credentials)
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">
+                        Default credential pool used when no specific credentials are assigned to a device.
+                        Credentials in the pool will be tried in priority order.
+                    </div>
+                </div>
+
+                {% if current_default_pool %}
+                <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i>
-                    Configure allowed and blocked commands for the Command Run Tool.
-                    Commands are validated using: 1) Block dangerous patterns, 2) Allow safe prefixes, 3) Allow standalone commands.
+                    <strong>Current Default Pool:</strong> {{ current_default_pool.name }}
+                    <br>
+                    <small class="text-muted">
+                        Contains {{ current_default_pool.credentials|length }} credentials:
+                        {% for cred in current_default_pool.get_credentials_list()[:3] %}
+                            {{ cred.name }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                        {% if current_default_pool.credentials|length > 3 %}
+                            and {{ current_default_pool.credentials|length - 3 }} more
+                        {% endif %}
+                    </small>
                 </div>
+                {% endif %}
 
-                <!-- Nav tabs -->
-                <ul class="nav nav-tabs mb-3" id="commandRulesTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="safe-prefixes-tab" data-bs-toggle="tab" data-bs-target="#safe-prefixes" type="button" role="tab">
-                            <i class="bi bi-check-circle text-success"></i> Safe Prefixes
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="dangerous-patterns-tab" data-bs-toggle="tab" data-bs-target="#dangerous-patterns" type="button" role="tab">
-                            <i class="bi bi-x-circle text-danger"></i> Dangerous Patterns
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="standalone-commands-tab" data-bs-toggle="tab" data-bs-target="#standalone-commands" type="button" role="tab">
-                            <i class="bi bi-terminal"></i> Standalone Commands
-                        </button>
-                    </li>
-                </ul>
-
-                <!-- Tab content -->
-                <div class="tab-content" id="commandRulesContent">
-                    <!-- Safe Prefixes Tab -->
-                    <div class="tab-pane fade show active" id="safe-prefixes" role="tabpanel">
-                        <p class="text-muted">Commands starting with these prefixes are allowed:</p>
-                        <div id="safePrefixesList" class="mb-3">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" id="newSafePrefix" placeholder="Add new safe prefix (e.g., 'show ')">
-                            <button class="btn btn-success" type="button" onclick="addSafePrefix()">
-                                <i class="bi bi-plus-circle"></i> Add
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Dangerous Patterns Tab -->
-                    <div class="tab-pane fade" id="dangerous-patterns" role="tabpanel">
-                        <p class="text-muted">Commands containing these patterns are blocked:</p>
-                        <div id="dangerousPatternsList" class="mb-3">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" id="newDangerousPattern" placeholder="Add new dangerous pattern (e.g., 'delete')">
-                            <button class="btn btn-danger" type="button" onclick="addDangerousPattern()">
-                                <i class="bi bi-plus-circle"></i> Add
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Standalone Commands Tab -->
-                    <div class="tab-pane fade" id="standalone-commands" role="tabpanel">
-                        <p class="text-muted">These specific commands are allowed as standalone:</p>
-                        <div id="standaloneCommandsList" class="mb-3">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" id="newStandaloneCommand" placeholder="Add new standalone command (e.g., 'uptime')">
-                            <button class="btn btn-primary" type="button" onclick="addStandaloneCommand()">
-                                <i class="bi bi-plus-circle"></i> Add
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Buttons -->
-                <div class="mt-3">
-                    <button type="button" class="btn btn-success" onclick="saveCommandRules()">
-                        <i class="bi bi-save"></i> Save Rules
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="resetToDefaults()">
-                        <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
-                    </button>
-                    <button type="button" class="btn btn-info" onclick="exportRules()">
-                        <i class="bi bi-download"></i> Export Rules
-                    </button>
-                    <button type="button" class="btn btn-warning" onclick="document.getElementById('importRulesFile').click()">
-                        <i class="bi bi-upload"></i> Import Rules
-                    </button>
-                    <input type="file" id="importRulesFile" accept=".json" style="display: none;" onchange="importRules(event)">
-                </div>
-
-                <!-- Test Command Section -->
-                <div class="card mt-3 bg-light">
-                    <div class="card-body">
-                        <h6 class="card-title">Test Command Validation</h6>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="testCommand" placeholder="Enter a command to test validation">
-                            <button class="btn btn-outline-secondary" type="button" onclick="testCommandValidation()">
-                                <i class="bi bi-play-circle"></i> Test
-                            </button>
-                        </div>
-                        <div id="testResult" class="mt-2"></div>
-                    </div>
-                </div>
-            </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-key"></i> Update Default Credentials
+                </button>
+            </form>
         </div>
+    </div>
+</div>
 
-        <!-- Password Complexity Settings Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                Password Complexity Requirements
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="password_min_length" name="password_min_length"
-                                   {% if settings.password_min_length %}checked{% endif %}>
-                            <label class="form-check-label" for="password_min_length">
-                                <strong>Minimum 8 characters</strong>
-                            </label>
-                            <div class="form-text">Require passwords to be at least 8 characters long</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="password_require_uppercase" name="password_require_uppercase"
-                                   {% if settings.password_require_uppercase %}checked{% endif %}>
-                            <label class="form-check-label" for="password_require_uppercase">
-                                <strong>Uppercase letter (A-Z)</strong>
-                            </label>
-                            <div class="form-text">Require at least one uppercase letter</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="password_require_lowercase" name="password_require_lowercase"
-                                   {% if settings.password_require_lowercase %}checked{% endif %}>
-                            <label class="form-check-label" for="password_require_lowercase">
-                                <strong>Lowercase letter (a-z)</strong>
-                            </label>
-                            <div class="form-text">Require at least one lowercase letter</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="password_require_number" name="password_require_number"
-                                   {% if settings.password_require_number %}checked{% endif %}>
-                            <label class="form-check-label" for="password_require_number">
-                                <strong>Number (0-9)</strong>
-                            </label>
-                            <div class="form-text">Require at least one number</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="password_require_special" name="password_require_special"
-                                   {% if settings.password_require_special %}checked{% endif %}>
-                            <label class="form-check-label" for="password_require_special">
-                                <strong>Special character</strong>
-                            </label>
-                            <div class="form-text">Require at least one special character (!@#$%^&* etc.)</div>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-warning">
-                        <i class="bi bi-shield-check"></i> Update Password Rules
-                    </button>
-                </form>
-            </div>
+<!-- Command Rules Tab -->
+<div id="command-rules-tab" class="tab-content-wrapper">
+    <div class="card settings-card">
+        <div class="card-header">
+            Command Validation Rules
         </div>
-
-        <!-- TACACS+ Authentication Card -->
-        <div class="card settings-card">
-            <div class="card-header">
-                TACACS+ Authentication
+        <div class="card-body">
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle"></i>
+                Configure allowed and blocked commands for the Command Run Tool.
+                Commands are validated using: 1) Block dangerous patterns, 2) Allow safe prefixes, 3) Allow standalone commands.
             </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('settings.update') }}">
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="tacacs_enabled" name="tacacs_enabled"
-                                   {% if settings.tacacs_enabled %}checked{% endif %}>
-                            <label class="form-check-label" for="tacacs_enabled">
-                                Enable TACACS+ Authentication
-                            </label>
-                        </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label for="tacacs_server" class="form-label">TACACS+ Server</label>
-                        <input type="text" class="form-control" id="tacacs_server" name="tacacs_server"
-                               value="{{ settings.tacacs_server or '' }}" placeholder="tacacs.example.com">
-                        <div class="form-text">IP address or hostname of the TACACS+ server</div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="tacacs_port" class="form-label">Port</label>
-                            <input type="number" class="form-control" id="tacacs_port" name="tacacs_port"
-                                   value="{{ settings.tacacs_port or 49 }}" min="1" max="65535">
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="tacacs_timeout" class="form-label">Timeout (seconds)</label>
-                            <input type="number" class="form-control" id="tacacs_timeout" name="tacacs_timeout"
-                                   value="{{ settings.tacacs_timeout or 10 }}" min="1" max="60">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="tacacs_secret" class="form-label">Shared Secret</label>
-                        <input type="password" class="form-control" id="tacacs_secret" name="tacacs_secret"
-                               value="{{ settings.tacacs_secret or '' }}" placeholder="Enter shared secret">
-                        <div class="form-text">Shared secret key for TACACS+ authentication</div>
-                    </div>
-
-                    <button type="submit" class="btn btn-secondary">
-                        <i class="bi bi-check-circle"></i> Update TACACS+
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs mb-3" id="commandRulesTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="safe-prefixes-tab" data-bs-toggle="tab" data-bs-target="#safe-prefixes" type="button" role="tab">
+                        <i class="bi bi-check-circle text-success"></i> Safe Prefixes
                     </button>
-
-                    <button type="button" class="btn btn-outline-info" onclick="testTacacs()">
-                        <i class="bi bi-wifi"></i> Test Connection
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="dangerous-patterns-tab" data-bs-toggle="tab" data-bs-target="#dangerous-patterns" type="button" role="tab">
+                        <i class="bi bi-x-circle text-danger"></i> Dangerous Patterns
                     </button>
-                </form>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="standalone-commands-tab" data-bs-toggle="tab" data-bs-target="#standalone-commands" type="button" role="tab">
+                        <i class="bi bi-terminal"></i> Standalone Commands
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab content -->
+            <div class="tab-content" id="commandRulesContent">
+                <!-- Safe Prefixes Tab -->
+                <div class="tab-pane fade show active" id="safe-prefixes" role="tabpanel">
+                    <p class="text-muted">Commands starting with these prefixes are allowed:</p>
+                    <div id="safePrefixesList" class="mb-3">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="newSafePrefix" placeholder="Add new safe prefix (e.g., 'show ')">
+                        <button class="btn btn-success" type="button" onclick="addSafePrefix()">
+                            <i class="bi bi-plus-circle"></i> Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dangerous Patterns Tab -->
+                <div class="tab-pane fade" id="dangerous-patterns" role="tabpanel">
+                    <p class="text-muted">Commands containing these patterns are blocked:</p>
+                    <div id="dangerousPatternsList" class="mb-3">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="newDangerousPattern" placeholder="Add new dangerous pattern (e.g., 'delete')">
+                        <button class="btn btn-danger" type="button" onclick="addDangerousPattern()">
+                            <i class="bi bi-plus-circle"></i> Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Standalone Commands Tab -->
+                <div class="tab-pane fade" id="standalone-commands" role="tabpanel">
+                    <p class="text-muted">These specific commands are allowed as standalone:</p>
+                    <div id="standaloneCommandsList" class="mb-3">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="newStandaloneCommand" placeholder="Add new standalone command (e.g., 'uptime')">
+                        <button class="btn btn-primary" type="button" onclick="addStandaloneCommand()">
+                            <i class="bi bi-plus-circle"></i> Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="mt-3">
+                <button type="button" class="btn btn-success" onclick="saveCommandRules()">
+                    <i class="bi bi-save"></i> Save Rules
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="resetToDefaults()">
+                    <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
+                </button>
+                <button type="button" class="btn btn-info" onclick="exportRules()">
+                    <i class="bi bi-download"></i> Export Rules
+                </button>
+                <button type="button" class="btn btn-warning" onclick="document.getElementById('importRulesFile').click()">
+                    <i class="bi bi-upload"></i> Import Rules
+                </button>
+                <input type="file" id="importRulesFile" accept=".json" style="display: none;" onchange="importRules(event)">
+            </div>
+
+            <!-- Test Command Section -->
+            <div class="card mt-3 bg-light">
+                <div class="card-body">
+                    <h6 class="card-title">Test Command Validation</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="testCommand" placeholder="Enter a command to test validation">
+                        <button class="btn btn-outline-secondary" type="button" onclick="testCommandValidation()">
+                            <i class="bi bi-play-circle"></i> Test
+                        </button>
+                    </div>
+                    <div id="testResult" class="mt-2"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+// Tab switching function
+function showSettingsTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.tab-content-wrapper');
+    tabContents.forEach(tab => tab.classList.remove('active'));
+
+    // Remove active class from all tabs
+    const tabs = document.querySelectorAll('.settings-tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+
+    // Show selected tab
+    document.getElementById(tabName + '-tab').classList.add('active');
+
+    // Set active tab button
+    event.target.classList.add('active');
+
+    // Save last active tab
+    localStorage.setItem('activeSettingsTab', tabName);
+}
+
+// Restore last active tab on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTab = localStorage.getItem('activeSettingsTab');
+    if (savedTab) {
+        showSettingsTab(savedTab);
+    }
+
+    // Load command rules
+    loadCommandRules();
+});
+
 // Global variables for command rules
 let commandRules = {
     safePrefixes: [],
     dangerousPatterns: [],
     standaloneCommands: []
 };
-
-// Load command rules when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    loadCommandRules();
-});
 
 // Load command rules from server
 function loadCommandRules() {
@@ -592,7 +699,6 @@ function loadCommandRules() {
         })
         .catch(error => {
             console.error('Error loading command rules:', error);
-            // Load default rules if server request fails
             loadDefaultRules();
         });
 }
@@ -808,7 +914,6 @@ function importRules(event) {
         try {
             const importedRules = JSON.parse(e.target.result);
 
-            // Validate imported data structure
             if (importedRules.safePrefixes && Array.isArray(importedRules.safePrefixes) &&
                 importedRules.dangerousPatterns && Array.isArray(importedRules.dangerousPatterns) &&
                 importedRules.standaloneCommands && Array.isArray(importedRules.standaloneCommands)) {
@@ -825,7 +930,6 @@ function importRules(event) {
     };
     reader.readAsText(file);
 
-    // Reset file input
     event.target.value = '';
 }
 
@@ -858,11 +962,10 @@ function testCommandValidation() {
     }
 }
 
-// Client-side command validation function (matches server-side logic)
+// Client-side command validation function
 function validateCommandSafety(command) {
     const cleanCommand = command.trim().toLowerCase();
 
-    // Step 1: Check for dangerous patterns first (blocklist approach)
     for (const pattern of commandRules.dangerousPatterns) {
         if (cleanCommand.includes(pattern.toLowerCase())) {
             return {
@@ -872,7 +975,6 @@ function validateCommandSafety(command) {
         }
     }
 
-    // Step 2: Check for safe prefixes (allowlist approach)
     for (const prefix of commandRules.safePrefixes) {
         if (cleanCommand.startsWith(prefix.toLowerCase())) {
             return {
@@ -882,7 +984,6 @@ function validateCommandSafety(command) {
         }
     }
 
-    // Step 3: Check standalone commands
     if (commandRules.standaloneCommands.some(cmd => cleanCommand === cmd.toLowerCase())) {
         return {
             isValid: true,
@@ -917,11 +1018,11 @@ function showAlert(type, message) {
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
 
-    // Insert alert after the command validation card
-    const commandCard = document.querySelector('.card:has(#commandRulesTabs)');
-    commandCard.insertAdjacentElement('afterend', alertDiv);
+    const commandCard = document.querySelector('#command-rules-tab .settings-card');
+    if (commandCard) {
+        commandCard.insertAdjacentElement('afterend', alertDiv);
+    }
 
-    // Auto-dismiss after 5 seconds
     setTimeout(() => {
         if (alertDiv.parentNode) {
             alertDiv.remove();

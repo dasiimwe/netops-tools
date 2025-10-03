@@ -618,6 +618,9 @@ def delete_device(device_id):
 def collect_interfaces(device_id):
     device = Device.query.get_or_404(device_id)
 
+    # Check if request is JSON (from inline progress)
+    is_json_request = request.is_json or request.headers.get('Content-Type') == 'application/json'
+
     try:
         from flask import current_app
         encryption_key = current_app.config['ENCRYPTION_KEY']
@@ -626,6 +629,8 @@ def collect_interfaces(device_id):
         credentials_list = get_credentials_for_device(device, encryption_key)
 
         if not credentials_list:
+            if is_json_request:
+                return jsonify({'success': False, 'error': 'No credentials configured for device collection'}), 400
             flash('No credentials configured for device collection. Please configure credentials.', 'warning')
             return redirect(url_for('devices.list_devices'))
 
@@ -647,6 +652,8 @@ def collect_interfaces(device_id):
             device.last_reachability_check = datetime.utcnow()
             device.last_error = error_msg
             db.session.commit()
+            if is_json_request:
+                return jsonify({'success': False, 'error': error_msg}), 400
             flash(f'Failed to connect to {device.hostname}: {error_msg}', 'danger')
             return redirect(url_for('devices.list_devices'))
 
@@ -674,6 +681,9 @@ def collect_interfaces(device_id):
             db.session.add(audit_log)
             db.session.commit()
 
+            if is_json_request:
+                return jsonify({'success': True, 'interfaces_found': len(interfaces_data), 'credential_used': credential_used.name})
+
             flash(f'Successfully collected {len(interfaces_data)} interfaces from {device.hostname} using credential "{credential_used.name}"', 'success')
 
         finally:
@@ -688,6 +698,9 @@ def collect_interfaces(device_id):
         device.last_reachability_check = datetime.utcnow()
         device.last_error = str(e)
         db.session.commit()
+
+        if is_json_request:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
         flash(f'Error collecting interfaces from {device.hostname}: {str(e)}', 'danger')
 
@@ -1081,38 +1094,50 @@ progress_sessions = {}
 @login_required
 def collect_interfaces_with_progress(device_id):
     """Start interface collection with progress tracking"""
-    device = Device.query.get_or_404(device_id)
+    try:
+        logger.info(f"Starting collect-progress for device_id: {device_id}")
+        device = Device.query.get(device_id)
+        if not device:
+            logger.error(f"Device {device_id} not found")
+            return jsonify({'error': f'Device {device_id} not found', 'progress_enabled': False}), 404
 
-    # Check if progress bar is enabled
-    show_progress = Settings.get_value('show_interface_progress', True)
-    if not show_progress:
-        # Fallback to regular collection
-        return collect_interfaces(device_id)
+        logger.info(f"Found device: {device.hostname}")
 
-    # Generate unique session ID
-    session_id = str(uuid.uuid4())
+        # Check if progress bar is enabled
+        show_progress = Settings.get_value('show_interface_progress', True)
+        logger.info(f"Progress setting: {show_progress}")
+        if not show_progress:
+            logger.info("Progress disabled, returning progress_enabled=False")
+            # Return JSON to tell frontend to use regular collection
+            return jsonify({'progress_enabled': False, 'session_id': None})
 
-    # Initialize progress session
-    progress_sessions[session_id] = {
-        'device_id': device_id,
-        'device_hostname': device.hostname,
-        'user_id': current_user.id,
-        'status': 'starting',
-        'commands': [],
-        'current_command': None,
-        'error': None,
-        'interfaces_found': 0,
-        'start_time': datetime.utcnow(),
-        'completed': False
-    }
+        # Generate unique session ID
+        session_id = str(uuid.uuid4())
 
-    # Start collection in background with app context
-    from threading import Thread
-    thread = Thread(target=_collect_with_progress, args=(session_id, current_app._get_current_object()))
-    thread.daemon = True
-    thread.start()
+        # Initialize progress session
+        progress_sessions[session_id] = {
+            'device_id': device_id,
+            'device_hostname': device.hostname,
+            'user_id': current_user.id,
+            'status': 'starting',
+            'commands': [],
+            'current_command': None,
+            'error': None,
+            'interfaces_found': 0,
+            'start_time': datetime.utcnow(),
+            'completed': False
+        }
 
-    return jsonify({'session_id': session_id, 'progress_enabled': True})
+        # Start collection in background with app context
+        from threading import Thread
+        thread = Thread(target=_collect_with_progress, args=(session_id, current_app._get_current_object()))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'session_id': session_id, 'progress_enabled': True})
+    except Exception as e:
+        logger.error(f"Error starting interface collection with progress: {str(e)}")
+        return jsonify({'error': str(e), 'progress_enabled': False}), 500
 
 @device_bp.route('/progress-stream/<session_id>')
 @login_required

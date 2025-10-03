@@ -147,6 +147,12 @@
 {% endblock %}
 
 {% block content %}
+<!-- Completion Message (hidden by default) -->
+<div id="completion-message" class="alert alert-dismissible fade show" role="alert" style="display: none;">
+    <strong id="completion-title"></strong> <span id="completion-text"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+
 <!-- Action Toolbar -->
 <div class="action-toolbar mb-4">
     <div class="btn-toolbar">
@@ -310,12 +316,19 @@
         </thead>
         <tbody>
             {% for device in devices %}
-            <tr>
+            <tr id="device-row-{{ device.id }}">
                 <td><input type="checkbox" class="device-checkbox" value="{{ device.id }}"></td>
                 <td>
                     <a href="{{ url_for('interfaces.device_interfaces', device_id=device.id) }}">
                         {{ device.hostname }}
                     </a>
+                    <!-- Inline Progress Bar (hidden by default) -->
+                    <div id="inline-progress-{{ device.id }}" style="display: none; margin-top: 5px;">
+                        <div class="progress" style="height: 20px;">
+                            <div id="inline-progress-bar-{{ device.id }}" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        <small id="inline-progress-status-{{ device.id }}" class="text-muted">Collecting interfaces...</small>
+                    </div>
                 </td>
                 <td>{{ device.ip_address }}</td>
                 <td>{{ device.vendor|replace('_', ' ')|title }}</td>
@@ -334,7 +347,7 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-primary" title="Collect Interfaces" onclick="collectInterfaces({{ device.id }}, '{{ device.hostname }}')">
+                        <button type="button" id="collect-btn-{{ device.id }}" class="btn btn-outline-primary" title="Collect Interfaces" onclick="collectInterfaces({{ device.id }}, '{{ device.hostname }}')">
                             <i class="bi bi-arrow-repeat"></i>
                         </button>
                         <button type="button" class="btn btn-outline-info" title="Test Connection" onclick="testDeviceConnection({{ device.id }}, '{{ device.hostname }}')">
@@ -786,19 +799,25 @@ function collectInterfaces(deviceId, hostname) {
             'Content-Type': 'application/json',
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
-        if (data.progress_enabled) {
-            // Show progress modal and start listening for updates
+        if (data.error) {
+            alert('Error starting interface collection: ' + data.error);
+        } else if (data.progress_enabled) {
             showProgressModal(hostname, data.session_id);
         } else {
-            // Fallback to regular collection
-            window.location.href = `/devices/${deviceId}/collect`;
+            // Show inline progress bar and start collection
+            showInlineProgress(deviceId, hostname);
         }
     })
     .catch(error => {
         console.error('Error starting collection:', error);
-        alert('Error starting interface collection');
+        alert('Error starting interface collection: ' + error.message);
     });
 }
 
@@ -816,8 +835,11 @@ function showProgressModal(hostname, sessionId) {
     document.getElementById('refreshButton').style.display = 'none';
 
     // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
-    modal.show();
+    const modalElement = document.getElementById('progressModal');
+    if (modalElement && typeof bootstrap !== 'undefined') {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
 
     // Start listening for progress updates
     startProgressStream(sessionId);
@@ -1008,7 +1030,6 @@ function refreshPage() {
 }
 
 function bulkCollect() {
-    var selected = [];
     var checkboxes = document.querySelectorAll('.device-checkbox:checked');
 
     if (checkboxes.length === 0) {
@@ -1020,21 +1041,47 @@ function bulkCollect() {
         return;
     }
 
-    // Create form and submit
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url_for("devices.bulk_collect") }}';
+    // Check if progress is enabled
+    const showProgress = {{ 'true' if show_progress else 'false' }};
 
-    checkboxes.forEach(function(checkbox) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'device_ids[]';
-        input.value = checkbox.value;
-        form.appendChild(input);
-    });
+    if (!showProgress) {
+        // Reset bulk collection results
+        bulkCollectionResults = {
+            total: checkboxes.length,
+            completed: 0,
+            failed: 0,
+            devices: []
+        };
 
-    document.body.appendChild(form);
-    form.submit();
+        // Use inline progress for each device
+        checkboxes.forEach(function(checkbox) {
+            const deviceId = checkbox.value;
+            const row = checkbox.closest('tr');
+            const hostname = row.querySelector('td:nth-child(2) a').textContent.trim();
+
+            // Disable checkbox during collection
+            checkbox.disabled = true;
+
+            // Show inline progress for this device
+            showInlineProgress(deviceId, hostname, true);
+        });
+    } else {
+        // Original behavior: submit form for bulk collect with progress modal
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("devices.bulk_collect") }}';
+
+        checkboxes.forEach(function(checkbox) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'device_ids[]';
+            input.value = checkbox.value;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 
 function updateBulkButtons() {
@@ -1049,6 +1096,172 @@ function updateBulkButtons() {
         bulkCredentialBtn.disabled = true;
         bulkVendorBtn.disabled = true;
     }
+}
+
+// Track bulk collection results
+let bulkCollectionResults = {
+    total: 0,
+    completed: 0,
+    failed: 0,
+    devices: []
+};
+
+function showInlineProgress(deviceId, hostname, isBulk = false) {
+    // Show progress bar
+    const progressContainer = document.getElementById(`inline-progress-${deviceId}`);
+    const progressBar = document.getElementById(`inline-progress-bar-${deviceId}`);
+    const progressStatus = document.getElementById(`inline-progress-status-${deviceId}`);
+    const collectBtn = document.getElementById(`collect-btn-${deviceId}`);
+
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        if (collectBtn) collectBtn.disabled = true;
+
+        // Simulate progress from 0 to 90% over time
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+
+            progressBar.style.width = progress + '%';
+            progressBar.setAttribute('aria-valuenow', progress);
+            progressBar.textContent = Math.round(progress) + '%';
+
+            if (progress >= 90) {
+                clearInterval(interval);
+                progressStatus.textContent = 'Finishing up...';
+            }
+        }, 500);
+
+        // Make POST request to collect interfaces
+        fetch(`/devices/${deviceId}/collect`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            clearInterval(interval);
+
+            // Complete progress to 100%
+            progressBar.style.width = '100%';
+            progressBar.setAttribute('aria-valuenow', 100);
+            progressBar.textContent = '100%';
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-success');
+            progressStatus.textContent = 'Complete!';
+
+            // Track results if part of bulk collection
+            if (isBulk) {
+                bulkCollectionResults.completed++;
+                bulkCollectionResults.devices.push({hostname, success: true, interfaces: data.interfaces_found || 0});
+                checkBulkCompletion();
+            } else {
+                // Show completion message at top of page for single device
+                showCompletionMessage(hostname, data);
+
+                // Reload page after 2 seconds
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            clearInterval(interval);
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-danger');
+            progressStatus.textContent = 'Error: ' + error.message;
+            if (collectBtn) collectBtn.disabled = false;
+
+            // Track results if part of bulk collection
+            if (isBulk) {
+                bulkCollectionResults.failed++;
+                bulkCollectionResults.devices.push({hostname, success: false, error: error.message});
+                checkBulkCompletion();
+            } else {
+                // Show error message
+                showCompletionMessage(hostname, {success: false, error: error.message});
+            }
+        });
+    }
+}
+
+function checkBulkCompletion() {
+    const total = bulkCollectionResults.total;
+    const processed = bulkCollectionResults.completed + bulkCollectionResults.failed;
+
+    if (processed >= total) {
+        // All devices processed, show summary
+        showBulkCompletionMessage();
+
+        // Reload page after 3 seconds
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    }
+}
+
+function showCompletionMessage(hostname, data) {
+    const messageDiv = document.getElementById('completion-message');
+    const titleSpan = document.getElementById('completion-title');
+    const textSpan = document.getElementById('completion-text');
+
+    if (data.success !== false) {
+        messageDiv.className = 'alert alert-success alert-dismissible fade show';
+        titleSpan.textContent = 'Success!';
+        const interfaceCount = data.interfaces_found || 0;
+        textSpan.textContent = `Collected ${interfaceCount} interface(s) from ${hostname}`;
+    } else {
+        messageDiv.className = 'alert alert-danger alert-dismissible fade show';
+        titleSpan.textContent = 'Error!';
+        textSpan.textContent = `Failed to collect interfaces from ${hostname}: ${data.error || 'Unknown error'}`;
+    }
+
+    messageDiv.style.display = 'block';
+
+    // Scroll to top to show the message
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function showBulkCompletionMessage() {
+    const messageDiv = document.getElementById('completion-message');
+    const titleSpan = document.getElementById('completion-title');
+    const textSpan = document.getElementById('completion-text');
+
+    const completed = bulkCollectionResults.completed;
+    const failed = bulkCollectionResults.failed;
+    const total = bulkCollectionResults.total;
+
+    // Calculate total interfaces collected
+    let totalInterfaces = 0;
+    bulkCollectionResults.devices.forEach(device => {
+        if (device.success) {
+            totalInterfaces += device.interfaces || 0;
+        }
+    });
+
+    if (failed === 0) {
+        // All succeeded
+        messageDiv.className = 'alert alert-success alert-dismissible fade show';
+        titleSpan.textContent = 'Bulk Collection Complete!';
+        textSpan.textContent = `Successfully collected ${totalInterfaces} interface(s) from ${completed} device(s)`;
+    } else if (completed === 0) {
+        // All failed
+        messageDiv.className = 'alert alert-danger alert-dismissible fade show';
+        titleSpan.textContent = 'Bulk Collection Failed!';
+        textSpan.textContent = `Failed to collect interfaces from all ${total} device(s)`;
+    } else {
+        // Mixed results
+        messageDiv.className = 'alert alert-warning alert-dismissible fade show';
+        titleSpan.textContent = 'Bulk Collection Completed with Errors';
+        textSpan.textContent = `Collected ${totalInterfaces} interface(s) from ${completed} device(s), ${failed} device(s) failed`;
+    }
+
+    messageDiv.style.display = 'block';
+
+    // Scroll to top to show the message
+    window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function showBulkCredentialModal() {

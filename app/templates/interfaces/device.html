@@ -94,21 +94,78 @@
 {% endblock %}
 
 {% block content %}
+<!-- Completion Message (hidden by default) -->
+<div id="completion-message" class="alert alert-dismissible fade show" role="alert" style="display: none;">
+    <strong id="completion-title"></strong> <span id="completion-text"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+
 <!-- Action Toolbar -->
 <div class="action-toolbar">
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <a href="{{ url_for('interfaces.add_interface', device_id=device.id) }}" class="btn btn-sm btn-primary">
             <i class="bi bi-plus-circle"></i> Add Interface
         </a>
-        <form method="POST" action="{{ url_for('devices.collect_interfaces', device_id=device.id) }}" style="display: inline;">
-            <button type="submit" class="btn btn-sm btn-success">
-                <i class="bi bi-arrow-repeat"></i> Collect Interfaces
-            </button>
-        </form>
+        <button type="button" class="btn btn-sm btn-success" onclick="collectInterfaces()">
+            <i class="bi bi-arrow-repeat"></i> Collect Interfaces
+        </button>
     </div>
     <a href="{{ url_for('devices.list_devices') }}" class="btn btn-sm btn-secondary">
         <i class="bi bi-arrow-left"></i> Back to Devices
     </a>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="progressModalLabel">
+                    <i class="bi bi-arrow-repeat"></i> Collecting Interfaces from <span id="deviceHostname">{{ device.hostname }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Main Status -->
+                <div class="mb-3">
+                    <strong>Status:</strong> <span id="currentStatus" class="badge bg-info">Starting...</span>
+                </div>
+
+                <!-- Current Command -->
+                <div class="mb-3" id="currentCommandSection" style="display: none;">
+                    <strong>Current Command:</strong>
+                    <div class="font-monospace text-muted" id="currentCommand"></div>
+                </div>
+
+                <!-- Commands Progress -->
+                <div class="mb-3" id="commandsSection" style="display: none;">
+                    <strong>Commands:</strong>
+                    <div id="commandsList" class="mt-2"></div>
+                </div>
+
+                <!-- Results -->
+                <div class="mb-3" id="resultsSection" style="display: none;">
+                    <strong>Results:</strong>
+                    <div class="alert alert-success">
+                        Found <span id="interfacesCount">0</span> interfaces with IP addresses.
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div class="mb-3" id="errorSection" style="display: none;">
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> <span id="errorMessage"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeButton">Close</button>
+                <button type="button" class="btn btn-primary" id="refreshButton" onclick="refreshPage()" style="display: none;">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh Page
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Device Information Card -->
@@ -238,11 +295,9 @@
                 <a href="{{ url_for('interfaces.add_interface', device_id=device.id) }}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-circle"></i> Add Interface Manually
                 </a>
-                <form method="POST" action="{{ url_for('devices.collect_interfaces', device_id=device.id) }}" style="display: inline;">
-                    <button type="submit" class="btn btn-sm btn-success ms-2">
-                        <i class="bi bi-arrow-repeat"></i> Collect from Device
-                    </button>
-                </form>
+                <button type="button" class="btn btn-sm btn-success ms-2" onclick="collectInterfaces()">
+                    <i class="bi bi-arrow-repeat"></i> Collect from Device
+                </button>
             </div>
         </div>
         {% endif %}
@@ -256,12 +311,370 @@
 
 {% block extra_js %}
 <script>
+const deviceId = {{ device.id }};
+const deviceHostname = '{{ device.hostname }}';
+const showProgress = {{ 'true' if show_progress else 'false' }};
+
 function deleteInterface(interfaceId, interfaceName) {
     if (confirm(`Are you sure you want to delete interface "${interfaceName}"?\n\nThis action cannot be undone.`)) {
         const form = document.getElementById('deleteForm');
         form.action = `/interfaces/${interfaceId}/delete`;
         form.submit();
     }
+}
+
+function collectInterfaces() {
+    fetch(`/devices/${deviceId}/collect-progress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.progress_enabled) {
+            // Show modal and track progress via SSE
+            showProgressModal(data.session_id);
+        } else {
+            // Show inline progress bar
+            showInlineProgress();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error starting interface collection');
+    });
+}
+
+let progressEventSource = null;
+
+function showProgressModal(sessionId) {
+    // Setup modal
+    document.getElementById('deviceHostname').textContent = deviceHostname;
+    document.getElementById('currentStatus').textContent = 'Starting...';
+    document.getElementById('currentStatus').className = 'badge bg-info';
+
+    // Hide all sections initially
+    document.getElementById('currentCommandSection').style.display = 'none';
+    document.getElementById('commandsSection').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+    document.getElementById('refreshButton').style.display = 'none';
+
+    // Show modal
+    const modalElement = document.getElementById('progressModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    // Start listening for progress updates
+    startProgressStream(sessionId);
+}
+
+function startProgressStream(sessionId) {
+    // Close existing connection if any
+    if (progressEventSource) {
+        progressEventSource.close();
+    }
+
+    progressEventSource = new EventSource(`/devices/progress-stream/${sessionId}`);
+
+    progressEventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            handleProgressUpdate(data);
+        } catch (error) {
+            console.error('Error parsing progress data:', error);
+        }
+    };
+
+    progressEventSource.onerror = function(error) {
+        console.error('Progress stream error:', error);
+        if (progressEventSource) {
+            progressEventSource.close();
+        }
+    };
+}
+
+function handleProgressUpdate(data) {
+    switch(data.type) {
+        case 'progress':
+            updateProgressDisplay(data);
+            break;
+        case 'complete':
+            handleCompletion(data);
+            break;
+        case 'error':
+            handleError(data);
+            break;
+    }
+}
+
+function updateProgressDisplay(data) {
+    // Update status
+    let statusBadge = document.getElementById('currentStatus');
+    statusBadge.textContent = formatStatus(data.status);
+
+    switch(data.status) {
+        case 'connecting':
+            statusBadge.className = 'badge bg-warning';
+            break;
+        case 'connected':
+            statusBadge.className = 'badge bg-info';
+            break;
+        case 'parsing':
+            statusBadge.className = 'badge bg-primary';
+            break;
+        case 'updating_database':
+            statusBadge.className = 'badge bg-primary';
+            break;
+        case 'completed':
+            statusBadge.className = 'badge bg-success';
+            break;
+        case 'failed':
+            statusBadge.className = 'badge bg-danger';
+            break;
+        default:
+            statusBadge.className = 'badge bg-secondary';
+    }
+
+    // Update current command
+    if (data.current_command) {
+        document.getElementById('currentCommandSection').style.display = 'block';
+        document.getElementById('currentCommand').textContent = data.current_command;
+    }
+
+    // Update commands list
+    if (data.commands && data.commands.length > 0) {
+        document.getElementById('commandsSection').style.display = 'block';
+        updateCommandsList(data.commands);
+    }
+
+    // Show interfaces found if available
+    if (data.interfaces_found > 0) {
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('interfacesCount').textContent = data.interfaces_found;
+    }
+
+    // Show error if present
+    if (data.error) {
+        document.getElementById('errorSection').style.display = 'block';
+        document.getElementById('errorMessage').textContent = data.error;
+    }
+}
+
+function updateCommandsList(commands) {
+    const commandsList = document.getElementById('commandsList');
+    commandsList.innerHTML = '';
+
+    commands.forEach(command => {
+        const commandDiv = document.createElement('div');
+        commandDiv.className = 'command-item d-flex justify-content-between align-items-center py-1';
+
+        const commandText = document.createElement('span');
+        commandText.className = 'font-monospace';
+        commandText.textContent = command.command;
+
+        const statusSpan = document.createElement('span');
+        switch(command.status) {
+            case 'pending':
+                statusSpan.innerHTML = '<i class="bi bi-clock text-muted"></i> Pending';
+                break;
+            case 'executing':
+                statusSpan.innerHTML = '<i class="bi bi-arrow-repeat text-primary"></i> Running...';
+                break;
+            case 'completed':
+                statusSpan.innerHTML = `<i class="bi bi-check-circle text-success"></i> Done (${command.output_length} chars)`;
+                break;
+            case 'failed':
+                statusSpan.innerHTML = '<i class="bi bi-x-circle text-danger"></i> Failed';
+                statusSpan.title = command.error || 'Unknown error';
+                break;
+        }
+
+        commandDiv.appendChild(commandText);
+        commandDiv.appendChild(statusSpan);
+        commandsList.appendChild(commandDiv);
+    });
+}
+
+function formatStatus(status) {
+    const statusMap = {
+        'starting': 'Starting...',
+        'connecting': 'Connecting...',
+        'connected': 'Connected',
+        'parsing': 'Parsing Data',
+        'updating_database': 'Updating Database',
+        'completed': 'Completed',
+        'failed': 'Failed'
+    };
+    return statusMap[status] || status;
+}
+
+function handleCompletion(data) {
+    // Close progress stream
+    if (progressEventSource) {
+        progressEventSource.close();
+        progressEventSource = null;
+    }
+
+    // Update final status
+    document.getElementById('currentStatus').textContent = data.success ? 'Completed Successfully' : 'Failed';
+    document.getElementById('currentStatus').className = data.success ? 'badge bg-success' : 'badge bg-danger';
+
+    // Hide current command section
+    document.getElementById('currentCommandSection').style.display = 'none';
+
+    // Show final results
+    if (data.success) {
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('interfacesCount').textContent = data.interfaces_found;
+        document.getElementById('refreshButton').style.display = 'inline-block';
+
+        // Show completion message at top of page
+        showCompletionMessage({
+            success: true,
+            interfaces_found: data.interfaces_found
+        });
+    }
+
+    // Show error if failed
+    if (!data.success && data.error) {
+        document.getElementById('errorSection').style.display = 'block';
+        document.getElementById('errorMessage').textContent = data.error;
+
+        // Show error message at top
+        showCompletionMessage({
+            success: false,
+            error: data.error
+        });
+    }
+}
+
+function handleError(data) {
+    // Close progress stream
+    if (progressEventSource) {
+        progressEventSource.close();
+        progressEventSource = null;
+    }
+
+    // Show error
+    document.getElementById('currentStatus').textContent = 'Error';
+    document.getElementById('currentStatus').className = 'badge bg-danger';
+    document.getElementById('errorSection').style.display = 'block';
+    document.getElementById('errorMessage').textContent = data.error || 'Unknown error occurred';
+
+    // Show error message at top
+    showCompletionMessage({
+        success: false,
+        error: data.error
+    });
+}
+
+function refreshPage() {
+    window.location.reload();
+}
+
+function showInlineProgress() {
+    // Create inline progress bar in the device info card
+    const deviceCard = document.querySelector('.table-card .card-body');
+    const existingProgress = document.getElementById('inline-progress-container');
+
+    if (existingProgress) {
+        existingProgress.remove();
+    }
+
+    const progressContainer = document.createElement('div');
+    progressContainer.id = 'inline-progress-container';
+    progressContainer.className = 'mb-3';
+    progressContainer.innerHTML = `
+        <div class="progress" style="height: 25px;">
+            <div id="inline-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                0%
+            </div>
+        </div>
+        <small id="inline-progress-status" class="text-muted">Collecting interfaces...</small>
+    `;
+
+    deviceCard.insertBefore(progressContainer, deviceCard.firstChild);
+
+    const progressBar = document.getElementById('inline-progress-bar');
+    const progressStatus = document.getElementById('inline-progress-status');
+
+    // Simulate progress from 0 to 90% over time
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+        progressBar.textContent = Math.round(progress) + '%';
+
+        if (progress >= 90) {
+            clearInterval(interval);
+            progressStatus.textContent = 'Finishing up...';
+        }
+    }, 500);
+
+    // Make POST request to collect interfaces
+    fetch(`/devices/${deviceId}/collect`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(interval);
+
+        // Complete progress to 100%
+        progressBar.style.width = '100%';
+        progressBar.setAttribute('aria-valuenow', 100);
+        progressBar.textContent = '100%';
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.add('bg-success');
+        progressStatus.textContent = 'Complete!';
+
+        // Show completion message at top of page
+        showCompletionMessage(data);
+
+        // Reload page after 2 seconds
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    })
+    .catch(error => {
+        clearInterval(interval);
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.add('bg-danger');
+        progressStatus.textContent = 'Error: ' + error.message;
+
+        // Show error message
+        showCompletionMessage({success: false, error: error.message});
+    });
+}
+
+function showCompletionMessage(data) {
+    const messageDiv = document.getElementById('completion-message');
+    const titleSpan = document.getElementById('completion-title');
+    const textSpan = document.getElementById('completion-text');
+
+    if (data.success !== false) {
+        messageDiv.className = 'alert alert-success alert-dismissible fade show';
+        titleSpan.textContent = 'Success!';
+        const interfaceCount = data.interfaces_found || 0;
+        textSpan.textContent = `Collected ${interfaceCount} interface(s) from ${deviceHostname}`;
+    } else {
+        messageDiv.className = 'alert alert-danger alert-dismissible fade show';
+        titleSpan.textContent = 'Error!';
+        textSpan.textContent = `Failed to collect interfaces from ${deviceHostname}: ${data.error || 'Unknown error'}`;
+    }
+
+    messageDiv.style.display = 'block';
+
+    // Scroll to top to show the message
+    window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 // Auto-refresh hint

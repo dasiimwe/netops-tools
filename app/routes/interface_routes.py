@@ -65,10 +65,15 @@ def list_interfaces():
 def device_interfaces(device_id):
     device = Device.query.get_or_404(device_id)
     interfaces = Interface.query.filter_by(device_id=device_id).all()
-    
-    return render_template('interfaces/device.html', 
-                         device=device, 
-                         interfaces=interfaces)
+
+    # Get show_progress setting
+    from app.models import Settings
+    show_progress = Settings.get_value('show_interface_progress', True)
+
+    return render_template('interfaces/device.html',
+                         device=device,
+                         interfaces=interfaces,
+                         show_progress=show_progress)
 
 @interface_bp.route('/api/summary')
 @login_required

@@ -61,159 +61,164 @@ def update():
     if not current_user.is_admin:
         flash('Admin access required', 'danger')
         return redirect(url_for('main.index'))
-    
-    # Update connection settings
-    Settings.set_value('retry_enabled', 
-                      request.form.get('retry_enabled') == 'on',
-                      'bool',
-                      'Enable connection retry on failure')
-    
-    Settings.set_value('retry_count',
-                      int(request.form.get('retry_count', 3)),
-                      'int',
-                      'Number of retry attempts')
-    
-    Settings.set_value('retry_delay',
-                      int(request.form.get('retry_delay', 5)),
-                      'int',
-                      'Delay between retries (seconds)')
-    
-    Settings.set_value('connection_timeout',
-                      int(request.form.get('connection_timeout', 30)),
-                      'int',
-                      'Connection timeout (seconds)')
-    
-    Settings.set_value('command_timeout',
-                      int(request.form.get('command_timeout', 30)),
-                      'int',
-                      'Command timeout (seconds)')
-    
-    Settings.set_value('max_concurrent',
-                      int(request.form.get('max_concurrent', 10)),
-                      'int',
-                      'Maximum concurrent connections for bulk operations')
-    
-    Settings.set_value('tacacs_enabled',
-                      request.form.get('tacacs_enabled') == 'on',
-                      'bool',
-                      'Enable TACACS+ authentication')
 
-    # Update TACACS+ settings
-    Settings.set_value('tacacs_server',
-                      request.form.get('tacacs_server', '').strip(),
-                      'string',
-                      'TACACS+ server hostname or IP address')
+    # Update connection settings (check form_id)
+    if request.form.get('form_id') == 'connection':
+        Settings.set_value('retry_enabled',
+                          request.form.get('retry_enabled') == 'on',
+                          'bool',
+                          'Enable connection retry on failure')
 
-    Settings.set_value('tacacs_port',
-                      int(request.form.get('tacacs_port', 49)),
-                      'int',
-                      'TACACS+ server port')
+        Settings.set_value('retry_count',
+                          int(request.form.get('retry_count', 3)),
+                          'int',
+                          'Number of retry attempts')
 
-    Settings.set_value('tacacs_timeout',
-                      int(request.form.get('tacacs_timeout', 10)),
-                      'int',
-                      'TACACS+ connection timeout (seconds)')
+        Settings.set_value('retry_delay',
+                          int(request.form.get('retry_delay', 5)),
+                          'int',
+                          'Delay between retries (seconds)')
 
-    # Store TACACS+ secret securely (encrypt if needed)
-    tacacs_secret = request.form.get('tacacs_secret', '').strip()
-    if tacacs_secret:  # Only update if a value is provided
-        Settings.set_value('tacacs_secret',
-                          tacacs_secret,
+        Settings.set_value('connection_timeout',
+                          int(request.form.get('connection_timeout', 30)),
+                          'int',
+                          'Connection timeout (seconds)')
+
+        Settings.set_value('command_timeout',
+                          int(request.form.get('command_timeout', 30)),
+                          'int',
+                          'Command timeout (seconds)')
+
+        Settings.set_value('max_concurrent',
+                          int(request.form.get('max_concurrent', 10)),
+                          'int',
+                          'Maximum concurrent connections for bulk operations')
+
+    # Update password complexity settings (check form_id)
+    if request.form.get('form_id') == 'password':
+        Settings.set_value('password_min_length',
+                          request.form.get('password_min_length') == 'on',
+                          'bool',
+                          'Require minimum 8 characters for passwords')
+
+        Settings.set_value('password_require_uppercase',
+                          request.form.get('password_require_uppercase') == 'on',
+                          'bool',
+                          'Require at least one uppercase letter in passwords')
+
+        Settings.set_value('password_require_lowercase',
+                          request.form.get('password_require_lowercase') == 'on',
+                          'bool',
+                          'Require at least one lowercase letter in passwords')
+
+        Settings.set_value('password_require_number',
+                          request.form.get('password_require_number') == 'on',
+                          'bool',
+                          'Require at least one number in passwords')
+
+        Settings.set_value('password_require_special',
+                          request.form.get('password_require_special') == 'on',
+                          'bool',
+                          'Require at least one special character in passwords')
+
+    # Update TACACS+ settings (check form_id)
+    if request.form.get('form_id') == 'tacacs':
+        Settings.set_value('tacacs_enabled',
+                          request.form.get('tacacs_enabled') == 'on',
+                          'bool',
+                          'Enable TACACS+ authentication')
+
+        Settings.set_value('tacacs_server',
+                          request.form.get('tacacs_server', '').strip(),
                           'string',
-                          'TACACS+ shared secret key')
+                          'TACACS+ server hostname or IP address')
 
-    # Update password complexity settings
-    Settings.set_value('password_min_length',
-                      request.form.get('password_min_length') == 'on',
-                      'bool',
-                      'Require minimum 8 characters for passwords')
+        Settings.set_value('tacacs_port',
+                          int(request.form.get('tacacs_port', 49)),
+                          'int',
+                          'TACACS+ server port')
 
-    Settings.set_value('password_require_uppercase',
-                      request.form.get('password_require_uppercase') == 'on',
-                      'bool',
-                      'Require at least one uppercase letter in passwords')
+        Settings.set_value('tacacs_timeout',
+                          int(request.form.get('tacacs_timeout', 10)),
+                          'int',
+                          'TACACS+ connection timeout (seconds)')
 
-    Settings.set_value('password_require_lowercase',
-                      request.form.get('password_require_lowercase') == 'on',
-                      'bool',
-                      'Require at least one lowercase letter in passwords')
+        # Store TACACS+ secret securely (encrypt if needed)
+        tacacs_secret = request.form.get('tacacs_secret', '').strip()
+        if tacacs_secret:  # Only update if a value is provided
+            Settings.set_value('tacacs_secret',
+                              tacacs_secret,
+                              'string',
+                              'TACACS+ shared secret key')
 
-    Settings.set_value('password_require_number',
-                      request.form.get('password_require_number') == 'on',
-                      'bool',
-                      'Require at least one number in passwords')
+    # Update UI settings (check form_id)
+    if request.form.get('form_id') == 'ui_settings':
+        Settings.set_value('show_interface_progress',
+                          request.form.get('show_interface_progress') == 'on',
+                          'bool',
+                          'Show detailed progress bar during interface collection')
 
-    Settings.set_value('password_require_special',
-                      request.form.get('password_require_special') == 'on',
-                      'bool',
-                      'Require at least one special character in passwords')
+        Settings.set_value('tooltip_theme',
+                          request.form.get('tooltip_theme', 'light'),
+                          'string',
+                          'IP Translator tooltip color theme')
 
-    # Update interface collection progress bar setting
-    Settings.set_value('show_interface_progress',
-                      request.form.get('show_interface_progress') == 'on',
-                      'bool',
-                      'Show detailed progress bar during interface collection')
+    # Update tool visibility settings (check form_id)
+    if request.form.get('form_id') == 'tool_visibility':
+        Settings.set_value('tool_ip_translator',
+                          request.form.get('tool_ip_translator') == 'on',
+                          'bool',
+                          'Show IP Translator tool on home page')
 
-    # Update tooltip theme setting
-    Settings.set_value('tooltip_theme',
-                      request.form.get('tooltip_theme', 'light'),
-                      'string',
-                      'IP Translator tooltip color theme')
+        Settings.set_value('tool_command_runner',
+                          request.form.get('tool_command_runner') == 'on',
+                          'bool',
+                          'Show Command Run Tool on home page')
 
-    # Update tool visibility settings
-    Settings.set_value('tool_ip_translator',
-                      request.form.get('tool_ip_translator') == 'on',
-                      'bool',
-                      'Show IP Translator tool on home page')
+        Settings.set_value('tool_dns_lookup',
+                          request.form.get('tool_dns_lookup') == 'on',
+                          'bool',
+                          'Show DNS Lookup tool on home page')
 
-    Settings.set_value('tool_command_runner',
-                      request.form.get('tool_command_runner') == 'on',
-                      'bool',
-                      'Show Command Run Tool on home page')
+        Settings.set_value('tool_traceroute',
+                          request.form.get('tool_traceroute') == 'on',
+                          'bool',
+                          'Show Traceroute tool on home page')
 
-    Settings.set_value('tool_dns_lookup',
-                      request.form.get('tool_dns_lookup') == 'on',
-                      'bool',
-                      'Show DNS Lookup tool on home page')
+        Settings.set_value('tool_url_insights',
+                          request.form.get('tool_url_insights') == 'on',
+                          'bool',
+                          'Show URL/App Insights tool on home page')
 
-    Settings.set_value('tool_traceroute',
-                      request.form.get('tool_traceroute') == 'on',
-                      'bool',
-                      'Show Traceroute tool on home page')
+        Settings.set_value('tool_whoami',
+                          request.form.get('tool_whoami') == 'on',
+                          'bool',
+                          'Show WhoAmI tool on home page')
 
-    Settings.set_value('tool_url_insights',
-                      request.form.get('tool_url_insights') == 'on',
-                      'bool',
-                      'Show URL/App Insights tool on home page')
-
-    Settings.set_value('tool_whoami',
-                      request.form.get('tool_whoami') == 'on',
-                      'bool',
-                      'Show WhoAmI tool on home page')
-
-    # Update default credential pool setting
-    default_credential_pool_id = request.form.get('default_credential_pool_id')
-    if default_credential_pool_id and default_credential_pool_id.strip():
-        # Validate that the pool exists
-        pool = CredentialPool.query.get(int(default_credential_pool_id))
-        if pool:
-            # Clear any existing default pool
-            CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
-            # Set the new default pool
-            pool.is_default = True
-            Settings.set_value('default_credential_pool_id',
-                              int(default_credential_pool_id),
-                              'int',
-                              'Default credential pool for device authentication')
+    # Update default credential pool setting (check form_id)
+    if request.form.get('form_id') == 'credentials':
+        default_credential_pool_id = request.form.get('default_credential_pool_id')
+        if default_credential_pool_id and default_credential_pool_id.strip():
+            # Validate that the pool exists
+            pool = CredentialPool.query.get(int(default_credential_pool_id))
+            if pool:
+                # Clear any existing default pool
+                CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
+                # Set the new default pool
+                pool.is_default = True
+                Settings.set_value('default_credential_pool_id',
+                                  int(default_credential_pool_id),
+                                  'int',
+                                  'Default credential pool for device authentication')
+            else:
+                flash('Selected credential pool not found', 'warning')
         else:
-            flash('Selected credential pool not found', 'warning')
-    else:
-        # Clear default pool setting
-        CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
-        Settings.set_value('default_credential_pool_id',
-                          None,
-                          'string',
-                          'Default credential pool for device authentication')
+            # Clear default pool setting
+            CredentialPool.query.filter_by(is_default=True).update({CredentialPool.is_default: False})
+            Settings.set_value('default_credential_pool_id',
+                              None,
+                              'string',
+                              'Default credential pool for device authentication')
 
     # Log settings update
     audit_log = AuditLog(
