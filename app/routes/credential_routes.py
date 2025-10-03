@@ -1,14 +1,15 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from app.routes import credential_bp
-from app.models import db, Credential, AuditLog
+from app.models import db, Credential, AuditLog, CredentialPool
 from datetime import datetime
 
 @credential_bp.route('/')
 @login_required
 def list_credentials():
     credentials = Credential.query.all()
-    return render_template('credentials/list.html', credentials=credentials)
+    pools = CredentialPool.query.all()
+    return render_template('credentials/list.html', credentials=credentials, pools=pools)
 
 @credential_bp.route('/add', methods=['GET', 'POST'])
 @login_required

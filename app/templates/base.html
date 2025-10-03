@@ -20,16 +20,106 @@
             left: 0;
             z-index: 100;
             padding: 48px 0 0;
-            box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+            background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%) !important;
+            border-right: 1px solid #dee2e6;
         }
         .sidebar-sticky {
             position: sticky;
             top: 0;
             height: calc(100vh - 56px);
-            padding-top: .5rem;
+            padding: 1rem 0;
             overflow-x: hidden;
             overflow-y: auto;
         }
+
+        /* Navigation Items */
+        .sidebar .nav-link {
+            color: #495057;
+            padding: 0.75rem 1.25rem;
+            margin: 0.25rem 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar .nav-link i {
+            font-size: 1.1rem;
+            width: 24px;
+            margin-right: 0.75rem;
+            opacity: 0.7;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        /* Hover State */
+        .sidebar .nav-link:hover {
+            background-color: rgba(13, 110, 253, 0.08);
+            color: #0d6efd;
+            transform: translateX(4px);
+        }
+
+        .sidebar .nav-link:hover i {
+            opacity: 1;
+        }
+
+        /* Active State */
+        .sidebar .nav-link.active {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+        }
+
+        .sidebar .nav-link.active i {
+            opacity: 1;
+        }
+
+        .sidebar .nav-link.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 60%;
+            background: white;
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* Section Dividers */
+        .sidebar-divider {
+            margin: 1rem 1.25rem;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .sidebar-heading {
+            padding: 0.75rem 1.25rem 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6c757d;
+        }
+
+        /* Scrollbar Styling */
+        .sidebar-sticky::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-sticky::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar-sticky::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 3px;
+        }
+
+        .sidebar-sticky::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+
         main {
             padding-top: 20px;
         }
@@ -75,7 +165,7 @@
         <div class="row">
             {% if current_user.is_authenticated %}
             <!-- Sidebar -->
-            <nav class="col-md-2 d-md-block bg-light sidebar">
+            <nav class="col-md-2 d-md-block sidebar">
                 <div class="sidebar-sticky">
                     <ul class="nav flex-column">
                         <li class="nav-item">
@@ -83,6 +173,9 @@
                                 <i class="bi bi-speedometer2"></i> Dashboard
                             </a>
                         </li>
+
+                        <!-- Network Management Section -->
+                        <li><div class="sidebar-heading">Network Management</div></li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'devices' in request.endpoint %}active{% endif %}" href="{{ url_for('devices.list_devices') }}">
                                 <i class="bi bi-router"></i> Devices
@@ -93,17 +186,18 @@
                                 <i class="bi bi-ethernet"></i> Interfaces
                             </a>
                         </li>
+
+                        <!-- Authentication Section -->
+                        <li><div class="sidebar-heading">Authentication</div></li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'credentials' in request.endpoint and 'credential_pools' not in request.endpoint %}active{% endif %}" href="{{ url_for('credentials.list_credentials') }}">
+                            <a class="nav-link {% if 'credentials' in request.endpoint or 'credential_pools' in request.endpoint %}active{% endif %}" href="{{ url_for('credentials.list_credentials') }}">
                                 <i class="bi bi-key"></i> Credentials
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'credential_pools' in request.endpoint %}active{% endif %}" href="{{ url_for('credential_pools.list_pools') }}">
-                                <i class="bi bi-collection"></i> Credential Pools
-                            </a>
-                        </li>
+
                         {% if current_user.is_admin %}
+                        <!-- Administration Section -->
+                        <li><div class="sidebar-heading">Administration</div></li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'users' in request.endpoint %}active{% endif %}" href="{{ url_for('auth.users') }}">
                                 <i class="bi bi-people"></i> Users

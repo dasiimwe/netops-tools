@@ -2,33 +2,200 @@
 
 {% block title %}Dashboard - NETOPS Toolkit{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Statistics Cards */
+    .stat-card {
+        border-radius: 1rem;
+        border: none;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        position: relative;
+        background: white;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+
+    .stat-card:hover::before {
+        width: 8px;
+    }
+
+    .stat-card.border-left-primary::before {
+        background: linear-gradient(180deg, #0d6efd 0%, #0a58ca 100%);
+    }
+
+    .stat-card.border-left-success::before {
+        background: linear-gradient(180deg, #198754 0%, #146c43 100%);
+    }
+
+    .stat-card.border-left-warning::before {
+        background: linear-gradient(180deg, #ffc107 0%, #ffb300 100%);
+    }
+
+    .stat-card.border-left-info::before {
+        background: linear-gradient(180deg, #0dcaf0 0%, #0aa2c0 100%);
+    }
+
+    .stat-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .stat-icon {
+        font-size: 2.5rem;
+        opacity: 0.2;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover .stat-icon {
+        opacity: 0.3;
+        transform: scale(1.1);
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0;
+    }
+
+    /* Content Cards */
+    .content-card {
+        border-radius: 1rem;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+        transition: box-shadow 0.3s ease;
+    }
+
+    .content-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .content-card .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 1rem 1rem 0 0 !important;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .content-card .card-title {
+        font-weight: 600;
+        color: #495057;
+        font-size: 1.1rem;
+    }
+
+    .content-card .card-body {
+        padding: 1.5rem;
+    }
+
+    /* Tables */
+    .content-card table {
+        margin-bottom: 0;
+    }
+
+    .content-card table thead th {
+        border-top: none;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.75rem;
+    }
+
+    .content-card table tbody td {
+        padding: 0.875rem 0.75rem;
+        vertical-align: middle;
+    }
+
+    .content-card table tbody tr {
+        transition: background-color 0.2s ease;
+    }
+
+    .content-card table tbody tr:hover {
+        background-color: rgba(13, 110, 253, 0.05);
+    }
+
+    /* Action Buttons */
+    .dashboard-actions .btn {
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .dashboard-actions .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Badges */
+    .badge {
+        padding: 0.4rem 0.75rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+    }
+
+    /* Links */
+    .content-card a {
+        color: #0d6efd;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s ease;
+    }
+
+    .content-card a:hover {
+        color: #0a58ca;
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <a href="{{ url_for('devices.add_device') }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-plus-circle"></i> Add Device
-            </a>
-            <a href="{{ url_for('interfaces.list_interfaces') }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-ethernet"></i> View Interfaces
-            </a>
-        </div>
+<!-- Quick Actions -->
+<div class="dashboard-actions mb-4">
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('devices.add_device') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Device
+        </a>
+        <a href="{{ url_for('interfaces.list_interfaces') }}" class="btn btn-outline-primary">
+            <i class="bi bi-ethernet"></i> View Interfaces
+        </a>
     </div>
 </div>
 
 <!-- Statistics Cards -->
 <div class="row">
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-primary shadow h-100 py-2">
+        <div class="card stat-card border-left-primary shadow h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Devices</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_devices }}</div>
+                        <div class="stat-label text-primary">Total Devices</div>
+                        <div class="stat-value text-gray-800">{{ stats.total_devices }}</div>
                     </div>
                     <div class="col-auto">
-                        <i class="bi bi-router fa-2x text-gray-300"></i>
+                        <i class="bi bi-router stat-icon text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -36,15 +203,15 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-success shadow h-100 py-2">
+        <div class="card stat-card border-left-success shadow h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Reachable</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.reachable_devices }}</div>
+                        <div class="stat-label text-success">Reachable</div>
+                        <div class="stat-value text-gray-800">{{ stats.reachable_devices }}</div>
                     </div>
                     <div class="col-auto">
-                        <i class="bi bi-check-circle fa-2x text-gray-300"></i>
+                        <i class="bi bi-check-circle stat-icon text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -52,15 +219,15 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-warning shadow h-100 py-2">
+        <div class="card stat-card border-left-warning shadow h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Total Interfaces</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_interfaces }}</div>
+                        <div class="stat-label text-warning">Total Interfaces</div>
+                        <div class="stat-value text-gray-800">{{ stats.total_interfaces }}</div>
                     </div>
                     <div class="col-auto">
-                        <i class="bi bi-ethernet fa-2x text-gray-300"></i>
+                        <i class="bi bi-ethernet stat-icon text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -68,15 +235,15 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-info shadow h-100 py-2">
+        <div class="card stat-card border-left-info shadow h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">IPv6 Enabled</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.ipv6_interfaces }}</div>
+                        <div class="stat-label text-info">IPv6 Enabled</div>
+                        <div class="stat-value text-gray-800">{{ stats.ipv6_interfaces }}</div>
                     </div>
                     <div class="col-auto">
-                        <i class="bi bi-globe fa-2x text-gray-300"></i>
+                        <i class="bi bi-globe stat-icon text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -87,9 +254,9 @@
 <div class="row">
     <!-- Vendor Distribution -->
     <div class="col-md-6">
-        <div class="card">
+        <div class="card content-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Devices by Vendor</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-pie-chart"></i> Devices by Vendor</h5>
             </div>
             <div class="card-body">
                 <table class="table table-sm">
@@ -103,7 +270,7 @@
                         {% for vendor, count in stats.vendor_distribution.items() %}
                         <tr>
                             <td>{{ vendor|replace('_', ' ')|title }}</td>
-                            <td>{{ count }}</td>
+                            <td><strong>{{ count }}</strong></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -114,9 +281,9 @@
 
     <!-- Recently Updated Devices -->
     <div class="col-md-6">
-        <div class="card">
+        <div class="card content-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Recently Updated Devices</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-clock-history"></i> Recently Updated Devices</h5>
             </div>
             <div class="card-body">
                 <table class="table table-sm">
@@ -149,11 +316,11 @@
 </div>
 
 <!-- Recent Activity -->
-<div class="row mt-4">
+<div class="row">
     <div class="col-12">
-        <div class="card">
+        <div class="card content-card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Recent Activity</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-activity"></i> Recent Activity</h5>
             </div>
             <div class="card-body">
                 <table class="table table-sm">
