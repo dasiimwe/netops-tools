@@ -50,11 +50,14 @@ def view_session_logs(session_id=None):
 
             if log.response:
                 # Show first few lines of response
-                response_lines = log.response.split('\n')[:3]
-                response_display = '\n'.join(response_lines)
-                if len(log.response.split('\n')) > 3:
-                    response_display += f"\n  ... ({len(log.response.split('\n'))-3} more lines)"
-                print(f"  Response:\n    {response_display.replace('\n', '\n    ')}")
+                newline = '\n'
+                response_lines = log.response.split(newline)[:3]
+                response_display = newline.join(response_lines)
+                num_response_lines = len(log.response.split(newline))
+                if num_response_lines > 3:
+                    response_display += f"\n  ... ({num_response_lines - 3} more lines)"
+                indented_response = response_display.replace(newline, f'{newline}    ')
+                print(f"  Response:\n    {indented_response}")
 
             if log.error_message:
                 print(f"  Error: {log.error_message}")
