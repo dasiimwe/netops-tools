@@ -300,6 +300,55 @@ def csv_template():
 
     return response
 
+@interface_bp.route('/export_csv')
+@login_required
+def export_csv():
+    """Export all interfaces to CSV (compatible with import format)"""
+    # Get all interfaces with device information
+    interfaces = Interface.query.join(Device).order_by(Device.hostname, Interface.name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header row (matches import template format)
+    writer.writerow([
+        'device_hostname',
+        'interface_name',
+        'description',
+        'ipv4_address',
+        'ipv6_address',
+        'status'
+    ])
+
+    # Write data rows
+    for interface in interfaces:
+        writer.writerow([
+            interface.device.hostname,
+            interface.name,
+            interface.description or '',
+            interface.ipv4_address or '',
+            interface.ipv6_address or '',
+            interface.status or ''
+        ])
+
+    # Create response with timestamp in filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=interfaces_export_{timestamp}.csv'
+    response.headers['Content-Type'] = 'text/csv'
+
+    # Log export
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        action='interfaces_exported',
+        details=f'Exported {len(interfaces)} interfaces to CSV',
+        ip_address=request.remote_addr
+    )
+    db.session.add(audit_log)
+    db.session.commit()
+
+    return response
+
 @interface_bp.route('/csv_import', methods=['POST'])
 @login_required
 def csv_import():

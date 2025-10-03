@@ -1406,3 +1406,151 @@ def _upsert_interfaces(device_id, interfaces_data):
             # Interface was collected before but is no longer present
             logger.info(f'Removing interface {intf_name} - no longer present on device')
             db.session.delete(existing_intf)
+
+@device_bp.route('/export_csv')
+@login_required
+def export_csv():
+    """Export all devices to CSV (compatible with import format)"""
+    from flask import make_response
+
+    # Get all devices
+    devices = Device.query.order_by(Device.hostname).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header row (matches import template format)
+    writer.writerow([
+        'hostname',
+        'ip_address',
+        'vendor'
+    ])
+
+    # Write data rows
+    for device in devices:
+        writer.writerow([
+            device.hostname,
+            device.ip_address,
+            device.vendor  # Keep vendor as-is (e.g., cisco_ios, paloalto) for import compatibility
+        ])
+
+    # Create response with timestamp in filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename=devices_export_{timestamp}.csv'
+    response.headers['Content-Type'] = 'text/csv'
+
+    # Log export
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        action='devices_exported_csv',
+        details=f'Exported {len(devices)} devices to CSV',
+        ip_address=request.remote_addr
+    )
+    db.session.add(audit_log)
+    db.session.commit()
+
+    return response
+
+@device_bp.route('/export_json')
+@login_required
+def export_json():
+    """Export all devices to JSON"""
+    from flask import make_response
+
+    # Get all devices with interfaces
+    devices = Device.query.order_by(Device.hostname).all()
+
+    data = []
+    for device in devices:
+        interfaces = []
+        for interface in device.interfaces:
+            interfaces.append({
+                'name': interface.name,
+                'description': interface.description,
+                'ipv4_address': interface.ipv4_address,
+                'ipv6_address': interface.ipv6_address,
+                'status': interface.status
+            })
+
+        data.append({
+            'hostname': device.hostname,
+            'ip_address': device.ip_address,
+            'vendor': device.vendor,
+            'device_type': device.device_type,
+            'location': device.location,
+            'is_reachable': device.is_reachable,
+            'interfaces': interfaces,
+            'updated_at': device.updated_at.isoformat() if device.updated_at else None,
+            'created_at': device.created_at.isoformat() if device.created_at else None
+        })
+
+    # Create response with timestamp in filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    response = make_response(json.dumps(data, indent=2))
+    response.headers['Content-Disposition'] = f'attachment; filename=devices_export_{timestamp}.json'
+    response.headers['Content-Type'] = 'application/json'
+
+    # Log export
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        action='devices_exported_json',
+        details=f'Exported {len(devices)} devices to JSON',
+        ip_address=request.remote_addr
+    )
+    db.session.add(audit_log)
+    db.session.commit()
+
+    return response
+
+@device_bp.route('/bulk-edit-vendor', methods=['POST'])
+@login_required
+def bulk_edit_vendor():
+    """Bulk update vendor for multiple devices"""
+    from flask import make_response
+
+    try:
+        data = request.get_json()
+        device_ids = data.get('device_ids', [])
+        vendor = data.get('vendor', '')
+
+        if not device_ids:
+            return jsonify({'success': False, 'message': 'No devices selected'}), 400
+
+        if not vendor:
+            return jsonify({'success': False, 'message': 'No vendor selected'}), 400
+
+        # Validate vendor
+        valid_vendors = ['cisco_ios', 'cisco_nxos', 'cisco_iosxr', 'paloalto', 'fortigate']
+        if vendor not in valid_vendors:
+            return jsonify({'success': False, 'message': 'Invalid vendor'}), 400
+
+        # Update devices
+        updated_count = 0
+        for device_id in device_ids:
+            device = Device.query.get(device_id)
+            if device:
+                device.vendor = vendor
+                updated_count += 1
+
+        db.session.commit()
+
+        # Log the action
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            action='bulk_vendor_update',
+            details=f'Updated vendor to {vendor} for {updated_count} devices',
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'updated_count': updated_count,
+            'message': f'Successfully updated {updated_count} device(s)'
+        })
+
+    except Exception as e:
+        logger.error(f"Bulk vendor update error: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
