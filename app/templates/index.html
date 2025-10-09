@@ -185,6 +185,92 @@
             color: #666;
             margin-top: 2px;
         }
+        .manage-modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 5px;
+        }
+        .manage-item {
+            padding: 10px;
+            margin: 10px 0;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .manage-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .manage-item-title {
+            font-weight: bold;
+            font-size: 14px;
+            flex: 1;
+        }
+        .manage-item-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .manage-item-content {
+            margin-top: 10px;
+        }
+        .manage-item-content textarea {
+            width: 100%;
+            min-height: 80px;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .manage-item-content input[type="text"] {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .btn-sm {
+            padding: 3px 8px;
+            font-size: 11px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-edit {
+            background: #007cba;
+            color: white;
+        }
+        .btn-save {
+            background: #28a745;
+            color: white;
+        }
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+        .manage-source-label {
+            font-size: 10px;
+            color: #666;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 10px;
+        }
+        .manage-item.editing {
+            background: #fff8e1;
+            border-color: #ffc107;
+        }
     </style>
 </head>
 <body>
@@ -251,7 +337,12 @@
     <!-- Command Run Tool Tab -->
     {% if tool_visibility.command_runner %}
     <div id="command-runner" class="tab-content{% if not tool_visibility.ip_translator %} active{% endif %}">
-        <p>Network Device Command Runner</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <p style="margin: 0;">Network Device Command Runner</p>
+            <button onclick="showSavedResults()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 14px;">
+                📁 View Saved Results
+            </button>
+        </div>
 
         <div style="display: flex; gap: 20px;">
             <div style="flex: 1;">
@@ -259,7 +350,8 @@
                     <label><strong>Devices:</strong></label>
                     <div>
                         <button onclick="saveDeviceList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
-                        <button onclick="loadDeviceList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                        <button onclick="loadDeviceList()" style="padding: 4px 8px; margin-right: 5px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                        <button onclick="manageDeviceLists()" style="padding: 4px 8px; background: #6c757d; color: white; border: none; cursor: pointer; font-size: 12px;">Manage</button>
                     </div>
                 </div>
                 <div class="add-item">
@@ -276,7 +368,8 @@
                     <label><strong>Commands:</strong></label>
                     <div>
                         <button onclick="saveCommandList()" style="padding: 4px 8px; margin-right: 5px; background: #28a745; color: white; border: none; cursor: pointer; font-size: 12px;">Save</button>
-                        <button onclick="loadCommandList()" style="padding: 4px 8px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                        <button onclick="loadCommandList()" style="padding: 4px 8px; margin-right: 5px; background: #007cba; color: white; border: none; cursor: pointer; font-size: 12px;">Load</button>
+                        <button onclick="manageCommandLists()" style="padding: 4px 8px; background: #6c757d; color: white; border: none; cursor: pointer; font-size: 12px;">Manage</button>
                     </div>
                 </div>
                 <div class="add-item">
@@ -295,7 +388,33 @@
         <div class="run-section">
             <label><strong>Credentials:</strong></label><br>
             <label>Username: <input type="text" id="username" style="margin: 5px;"></label><br>
-            <label>Password: <input type="password" id="password" style="margin: 5px;"></label><br><br>
+            <label>Password: <input type="password" id="password" style="margin: 5px;"></label><br>
+
+            {% if show_connector_dropdown %}
+            <label style="margin-top: 10px; display: block;"><strong>Preferred Device Connector (optional):</strong></label>
+            <select id="preferredConnector" style="margin: 5px; padding: 5px; width: 250px;">
+                <option value="">Auto-detect (try all)</option>
+                <option value="cisco_ios">Cisco IOS/IOS-XE</option>
+                <option value="cisco_nxos">Cisco NX-OS</option>
+                <option value="cisco_iosxr">Cisco IOS-XR</option>
+                <option value="cisco_asa">Cisco ASA</option>
+                <option value="paloalto_panos">Palo Alto PAN-OS</option>
+                <option value="fortinet">FortiGate</option>
+                <option value="arista_eos">Arista EOS</option>
+                <option value="juniper_junos">Juniper Junos</option>
+            </select>
+            <div style="font-size: 11px; color: #666; margin-left: 5px; margin-top: 2px;">
+                If specified, this connector will be tried first before auto-detection
+            </div>
+            <br>
+            {% endif %}
+
+            <label style="display: block; margin-top: 10px;"><strong>Session Name (optional):</strong></label>
+            <input type="text" id="sessionName" placeholder="e.g., maintenance-session" style="margin: 5px; padding: 5px; width: 250px;">
+            <div style="font-size: 11px; color: #666; margin-left: 5px; margin-top: 2px;">
+                Used in the results filename: sessionname_YYYYMMDD_HHMMSS.zip
+            </div>
+            <br>
 
             <button onclick="runCommands()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer;">Run Commands</button>
             <div id="runProgress" style="display: none; margin-top: 10px;">
@@ -306,7 +425,7 @@
         <div class="output-section">
             <div id="commandResults"></div>
             <div id="downloadSection" style="display: none; margin-top: 20px;">
-                <button onclick="downloadResults()" style="padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer;">Download All Results (ZIP)</button>
+                <button onclick="downloadResults()" style="padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px;">💾 Download Results (ZIP)</button>
             </div>
         </div>
     </div>
@@ -749,6 +868,59 @@
         </div>
     </div>
 
+    <!-- Manage Device Lists Modal -->
+    <div id="manageDeviceListsModal" class="modal">
+        <div class="manage-modal-content">
+            <div class="modal-header">
+                <h3>Manage Saved Device Lists</h3>
+                <span class="close" onclick="closeManageDeviceListsModal()">&times;</span>
+            </div>
+            <div id="manageDeviceListsContent">
+                <em>Loading...</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Command Lists Modal -->
+    <div id="manageCommandListsModal" class="modal">
+        <div class="manage-modal-content">
+            <div class="modal-header">
+                <h3>Manage Saved Commands</h3>
+                <span class="close" onclick="closeManageCommandListsModal()">&times;</span>
+            </div>
+            <div id="manageCommandListsContent">
+                <em>Loading...</em>
+            </div>
+        </div>
+    </div>
+
+    <!-- Saved Results Browser Modal -->
+    <div id="savedResultsModal" class="modal">
+        <div class="manage-modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3>Saved Command Results</h3>
+                <span class="close" onclick="closeSavedResults()">&times;</span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <input type="text" id="resultsSearch" placeholder="Search by session name or date..." style="width: 300px; padding: 8px; margin-right: 10px;" oninput="filterResults()">
+                <select id="resultsSortBy" style="padding: 8px; margin-right: 10px;" onchange="sortResults()">
+                    <option value="date_desc">Newest First</option>
+                    <option value="date_asc">Oldest First</option>
+                    <option value="name_asc">Name A-Z</option>
+                    <option value="name_desc">Name Z-A</option>
+                    <option value="size_desc">Largest First</option>
+                    <option value="size_asc">Smallest First</option>
+                </select>
+            </div>
+            <div id="savedResultsContent" style="max-height: 500px; overflow-y: auto;">
+                <em>Loading...</em>
+            </div>
+            <div id="resultsPagination" style="margin-top: 15px; text-align: center;">
+                <!-- Pagination controls will be inserted here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Save DNS Server List Modal -->
     <div id="saveDnsServerModal" class="modal">
         <div class="modal-content">
@@ -972,14 +1144,62 @@
         }
 
         // Command runner functions
-        function addDevice() {
+        async function addDevice() {
             const deviceInput = document.getElementById('deviceInput');
             const device = deviceInput.value.trim();
 
-            if (device && !devices.includes(device)) {
-                devices.push(device);
-                updateDeviceList();
+            if (!device) {
+                return;
+            }
+
+            // Check if already exists (check both raw and display format)
+            const alreadyExists = devices.some(d => {
+                const parts = d.split(' | ');
+                return d === device || parts[0] === device || (parts[1] && parts[1] === device);
+            });
+
+            if (alreadyExists) {
+                alert('Device already exists in the list');
                 deviceInput.value = '';
+                return;
+            }
+
+            // Show loading indicator
+            const originalPlaceholder = deviceInput.placeholder;
+            deviceInput.placeholder = 'Resolving...';
+            deviceInput.disabled = true;
+
+            try {
+                // Resolve hostname to IP
+                const response = await fetch('/api/resolve-hostname', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        hostname: device
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Add the device with resolved format
+                    devices.push(data.display);
+                    updateDeviceList();
+                    deviceInput.value = '';
+                } else {
+                    // Hostname resolution failed
+                    alert(`Unable to add device: ${data.error}\n\nPlease check the hostname/IP and try again.`);
+                }
+            } catch (error) {
+                console.error('Error resolving hostname:', error);
+                alert('Error resolving hostname. Please try again.');
+            } finally {
+                // Restore input state
+                deviceInput.placeholder = originalPlaceholder;
+                deviceInput.disabled = false;
+                deviceInput.focus();
             }
         }
 
@@ -1053,6 +1273,9 @@
             }
         }
 
+        // Store results globally for download
+        let globalResults = {};
+
         async function runCommands() {
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value.trim();
@@ -1098,10 +1321,19 @@
             const commandResults = document.getElementById('commandResults');
 
             runProgress.style.display = 'block';
+            runProgress.innerHTML = '<div>Running commands... Results will appear as they are received.</div>';
             commandResults.innerHTML = '';
+            globalResults = {};
+            savedResultsFilename = null; // Reset for new run
 
+            // Get preferred connector (if dropdown exists)
+            const connectorDropdown = document.getElementById('preferredConnector');
+            const preferredConnector = connectorDropdown ? connectorDropdown.value.trim() : '';
+
+            // Use EventSource for SSE streaming
             try {
-                const response = await fetch('/api/run-commands', {
+                // First make a POST request to get validation
+                const validateResponse = await fetch('/api/run-commands-stream', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1110,24 +1342,116 @@
                         devices: devices,
                         commands: commands,
                         username: username,
-                        password: password
+                        password: password,
+                        preferred_connector: preferredConnector
                     })
                 });
 
-                const data = await response.json();
-
-                if (data.success) {
-                    displayResults(data.results);
-                    document.getElementById('downloadSection').style.display = 'block';
-                } else {
+                // Check if response is JSON (error) or SSE stream
+                const contentType = validateResponse.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await validateResponse.json();
                     alert('Error: ' + data.error);
+                    runProgress.style.display = 'none';
+                    return;
+                }
+
+                // Read the SSE stream
+                const reader = validateResponse.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let devicesCompleted = 0;
+                let totalDevices = devices.length;
+
+                while (true) {
+                    const {done, value} = await reader.read();
+
+                    if (done) break;
+
+                    buffer += decoder.decode(value, {stream: true});
+
+                    // Process complete messages
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // Keep incomplete message in buffer
+
+                    for (const line of lines) {
+                        if (!line.trim() || !line.startsWith('data: ')) continue;
+
+                        try {
+                            const eventData = JSON.parse(line.substring(6)); // Remove 'data: ' prefix
+
+                            if (eventData.type === 'started') {
+                                totalDevices = eventData.total_devices;
+                                runProgress.innerHTML = `<div>Running commands on ${totalDevices} device(s)... 0/${totalDevices} completed</div>`;
+                            } else if (eventData.type === 'device_complete') {
+                                devicesCompleted++;
+                                globalResults[eventData.device] = eventData.data;
+                                displayDeviceResult(eventData.device, eventData.data);
+                                runProgress.innerHTML = `<div>Running commands... ${devicesCompleted}/${totalDevices} devices completed</div>`;
+                            } else if (eventData.type === 'complete') {
+                                runProgress.innerHTML = `<div style="color: green;">✓ All commands completed! (${devicesCompleted}/${totalDevices} devices) - Saving results...</div>`;
+
+                                // Auto-save results to server immediately
+                                await autoSaveResults();
+
+                                runProgress.innerHTML = `<div style="color: green;">✓ All commands completed and saved! (${devicesCompleted}/${totalDevices} devices)</div>`;
+                                document.getElementById('downloadSection').style.display = 'block';
+                                setTimeout(() => {
+                                    runProgress.style.display = 'none';
+                                }, 3000);
+                            } else if (eventData.type === 'error') {
+                                runProgress.innerHTML += `<div style="color: red;">Error: ${eventData.message}</div>`;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing SSE message:', e, line);
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Error running commands:', error);
                 alert('Error running commands: ' + error.message);
-            } finally {
                 runProgress.style.display = 'none';
             }
+        }
+
+        function displayDeviceResult(device, deviceData) {
+            const commandResults = document.getElementById('commandResults');
+
+            const deviceDiv = document.createElement('div');
+            deviceDiv.className = 'device-output';
+            deviceDiv.id = `device-result-${device.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+            const deviceHeader = document.createElement('h4');
+            deviceHeader.textContent = `${device} (${deviceData.status})`;
+            if (deviceData.status === 'success') {
+                deviceHeader.style.color = '#28a745';
+            } else {
+                deviceHeader.style.color = '#dc3545';
+            }
+            deviceDiv.appendChild(deviceHeader);
+
+            if (deviceData.status === 'success') {
+                for (const [command, commandData] of Object.entries(deviceData.commands)) {
+                    const commandDiv = document.createElement('div');
+                    commandDiv.innerHTML = `<strong>Command:</strong> ${command}`;
+                    deviceDiv.appendChild(commandDiv);
+
+                    const outputDiv = document.createElement('div');
+                    outputDiv.className = 'command-output';
+                    outputDiv.textContent = commandData.output || 'No output';
+                    deviceDiv.appendChild(outputDiv);
+                }
+            } else {
+                const errorDiv = document.createElement('div');
+                errorDiv.style.color = 'red';
+                errorDiv.textContent = deviceData.error || 'Unknown error';
+                deviceDiv.appendChild(errorDiv);
+            }
+
+            commandResults.appendChild(deviceDiv);
+
+            // Scroll to the newly added result
+            deviceDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         function displayResults(results) {
@@ -1185,39 +1509,245 @@
             window.lastResults = results;
         }
 
-        async function downloadResults() {
-            if (!window.lastResults) {
-                alert('No results to download');
+        // Store the saved filename globally
+        let savedResultsFilename = null;
+
+        async function autoSaveResults() {
+            if (!globalResults || Object.keys(globalResults).length === 0) {
                 return;
             }
 
+            // Get session name
+            const sessionName = document.getElementById('sessionName').value.trim();
+            const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-').replace('T', '_');
+            const filename = sessionName ? `${sessionName}_${timestamp}.zip` : `command_results_${timestamp}.zip`;
+
             try {
-                const response = await fetch('/api/download-results', {
+                const response = await fetch('/api/save-results', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        results: window.lastResults
+                        results: globalResults,
+                        session_name: sessionName,
+                        filename: filename
                     })
                 });
 
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        savedResultsFilename = data.filename;
+                        console.log('Results saved:', savedResultsFilename);
+                    }
+                } else {
+                    console.error('Error saving results');
+                }
+            } catch (error) {
+                console.error('Error saving results:', error);
+            }
+        }
+
+        async function downloadResults() {
+            if (!savedResultsFilename) {
+                alert('No saved results available. Please run commands first.');
+                return;
+            }
+
+            try {
+                // Download the already-saved file
+                const a = document.createElement('a');
+                a.href = `/api/saved-results/${encodeURIComponent(savedResultsFilename)}`;
+                a.download = savedResultsFilename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch (error) {
+                console.error('Error downloading results:', error);
+                alert('Error downloading results: ' + error.message);
+            }
+        }
+
+        // Saved Results Browser
+        let allSavedResults = [];
+        let filteredResults = [];
+        let currentPage = 1;
+        const resultsPerPage = 10;
+
+        async function showSavedResults() {
+            document.getElementById('savedResultsModal').style.display = 'block';
+            await loadSavedResults();
+        }
+
+        function closeSavedResults() {
+            document.getElementById('savedResultsModal').style.display = 'none';
+        }
+
+        async function loadSavedResults() {
+            try {
+                const response = await fetch('/api/saved-results');
+                if (response.ok) {
+                    allSavedResults = await response.json();
+                    filteredResults = [...allSavedResults];
+                    sortResults();
+                } else {
+                    alert('Error loading saved results');
+                }
+            } catch (error) {
+                console.error('Error loading saved results:', error);
+                alert('Error loading saved results: ' + error.message);
+            }
+        }
+
+        function filterResults() {
+            const searchTerm = document.getElementById('resultsSearch').value.toLowerCase();
+            filteredResults = allSavedResults.filter(result => {
+                return result.filename.toLowerCase().includes(searchTerm) ||
+                       new Date(result.created).toLocaleString().toLowerCase().includes(searchTerm);
+            });
+            currentPage = 1;
+            displayResults();
+        }
+
+        function sortResults() {
+            const sortBy = document.getElementById('resultsSortBy').value;
+
+            filteredResults.sort((a, b) => {
+                switch(sortBy) {
+                    case 'date_desc':
+                        return new Date(b.created) - new Date(a.created);
+                    case 'date_asc':
+                        return new Date(a.created) - new Date(b.created);
+                    case 'name_asc':
+                        return a.filename.localeCompare(b.filename);
+                    case 'name_desc':
+                        return b.filename.localeCompare(a.filename);
+                    case 'size_desc':
+                        return b.size - a.size;
+                    case 'size_asc':
+                        return a.size - b.size;
+                    default:
+                        return 0;
+                }
+            });
+
+            displayResults();
+        }
+
+        function displayResults() {
+            const contentDiv = document.getElementById('savedResultsContent');
+            const totalPages = Math.ceil(filteredResults.length / resultsPerPage);
+            const startIndex = (currentPage - 1) * resultsPerPage;
+            const endIndex = Math.min(startIndex + resultsPerPage, filteredResults.length);
+
+            if (filteredResults.length === 0) {
+                contentDiv.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No results found</p>';
+                document.getElementById('resultsPagination').innerHTML = '';
+                return;
+            }
+
+            let html = '<table style="width: 100%; border-collapse: collapse;">';
+            html += '<thead><tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">';
+            html += '<th style="padding: 10px; text-align: left;">Filename</th>';
+            html += '<th style="padding: 10px; text-align: left;">Created</th>';
+            html += '<th style="padding: 10px; text-align: right;">Size</th>';
+            html += '<th style="padding: 10px; text-align: center;">Actions</th>';
+            html += '</tr></thead><tbody>';
+
+            for (let i = startIndex; i < endIndex; i++) {
+                const result = filteredResults[i];
+                const sizeKB = (result.size / 1024).toFixed(2);
+                const createdDate = new Date(result.created).toLocaleString();
+
+                html += '<tr style="border-bottom: 1px solid #eee;">';
+                html += `<td style="padding: 10px;">${result.filename}</td>`;
+                html += `<td style="padding: 10px;">${createdDate}</td>`;
+                html += `<td style="padding: 10px; text-align: right;">${sizeKB} KB</td>`;
+                html += `<td style="padding: 10px; text-align: center;">`;
+                html += `<button onclick="downloadSavedResult('${result.filename}')" style="padding: 5px 10px; margin-right: 5px; background: #007cba; color: white; border: none; cursor: pointer; border-radius: 3px;">Download</button>`;
+                html += `<button onclick="deleteSavedResult('${result.filename}')" style="padding: 5px 10px; background: #dc3545; color: white; border: none; cursor: pointer; border-radius: 3px;">Delete</button>`;
+                html += `</td></tr>`;
+            }
+
+            html += '</tbody></table>';
+            contentDiv.innerHTML = html;
+
+            // Pagination controls
+            let paginationHTML = '<div style="display: inline-block;">';
+            paginationHTML += `<span style="margin-right: 15px;">Page ${currentPage} of ${totalPages} (${filteredResults.length} results)</span>`;
+
+            if (currentPage > 1) {
+                paginationHTML += `<button onclick="changePage(${currentPage - 1})" style="padding: 5px 10px; margin-right: 5px; cursor: pointer;">Previous</button>`;
+            }
+
+            // Show page numbers
+            const maxPageButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+
+            if (endPage - startPage < maxPageButtons - 1) {
+                startPage = Math.max(1, endPage - maxPageButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === currentPage;
+                paginationHTML += `<button onclick="changePage(${i})" style="padding: 5px 10px; margin-right: 5px; ${isActive ? 'background: #007cba; color: white;' : ''} cursor: pointer;">${i}</button>`;
+            }
+
+            if (currentPage < totalPages) {
+                paginationHTML += `<button onclick="changePage(${currentPage + 1})" style="padding: 5px 10px; cursor: pointer;">Next</button>`;
+            }
+
+            paginationHTML += '</div>';
+            document.getElementById('resultsPagination').innerHTML = paginationHTML;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            displayResults();
+        }
+
+        async function downloadSavedResult(filename) {
+            try {
+                const response = await fetch(`/api/saved-results/${encodeURIComponent(filename)}`);
                 if (response.ok) {
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `command_results_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.zip`;
+                    a.download = filename;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     a.remove();
                 } else {
-                    alert('Error downloading results');
+                    alert('Error downloading file');
                 }
             } catch (error) {
-                console.error('Error downloading results:', error);
-                alert('Error downloading results: ' + error.message);
+                console.error('Error downloading file:', error);
+                alert('Error downloading file: ' + error.message);
+            }
+        }
+
+        async function deleteSavedResult(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/saved-results/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadSavedResults();
+                } else {
+                    alert('Error deleting file');
+                }
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                alert('Error deleting file: ' + error.message);
             }
         }
 
@@ -1268,6 +1798,9 @@
             }
         });
 
+        // Check if user is authenticated (passed from Flask template)
+        const userAuthenticated = {{ 'true' if user_authenticated else 'false' }};
+
         // Save/Load functionality for device lists
         function saveDeviceList() {
             if (devices.length === 0) {
@@ -1283,57 +1816,81 @@
             document.getElementById('deviceListName').value = '';
         }
 
-        function confirmSaveDeviceList() {
+        async function confirmSaveDeviceList() {
             const listName = document.getElementById('deviceListName').value.trim();
             if (!listName) {
                 alert('Please enter a list name');
                 return;
             }
 
-            // Save to localStorage
-            let savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
-            savedDeviceLists[listName] = {
-                devices: [...devices],
-                savedAt: new Date().toISOString()
-            };
-            localStorage.setItem('savedDeviceLists', JSON.stringify(savedDeviceLists));
+            // Save to database via API
+            try {
+                const response = await fetch('/saved-items/api/quick-save-devices', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        devices: devices,
+                        name: listName
+                    })
+                });
 
-            alert(`Device list "${listName}" saved successfully!`);
-            closeSaveDeviceModal();
+                const data = await response.json();
+                if (data.success) {
+                    // alert(`Device list "${listName}" saved successfully!`);
+                    closeSaveDeviceModal();
+                } else {
+                    alert(`Error saving: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error saving: ${error.message}`);
+            }
         }
 
-        function loadDeviceList() {
-            const savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
+        async function loadDeviceList() {
             const savedListsDiv = document.getElementById('savedDeviceLists');
+            savedListsDiv.innerHTML = '<em>Loading...</em>';
 
-            if (Object.keys(savedDeviceLists).length === 0) {
-                savedListsDiv.innerHTML = '<em>No saved device lists found...</em>';
-            } else {
-                savedListsDiv.innerHTML = '';
-                for (const [listName, listData] of Object.entries(savedDeviceLists)) {
-                    const savedItem = document.createElement('div');
-                    savedItem.className = 'saved-item';
+            // Get all lists from database
+            try {
+                const response = await fetch('/saved-items/api/device-lists');
+                if (response.ok) {
+                    const dbLists = await response.json();
 
-                    const itemInfo = document.createElement('div');
-                    itemInfo.innerHTML = `
-                        <div class="saved-item-name">${listName}</div>
-                        <div class="saved-item-count">${listData.devices.length} devices - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
-                    `;
+                    if (dbLists.length === 0) {
+                        savedListsDiv.innerHTML = '<em>No saved device lists found...</em>';
+                    } else {
+                        savedListsDiv.innerHTML = '';
+                        for (const list of dbLists) {
+                            const savedItem = document.createElement('div');
+                            savedItem.className = 'saved-item';
 
-                    const deleteBtn = document.createElement('span');
-                    deleteBtn.className = 'delete-saved';
-                    deleteBtn.innerHTML = '✗';
-                    deleteBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        deleteDeviceList(listName);
-                    };
+                            const itemInfo = document.createElement('div');
+                            itemInfo.innerHTML = `
+                                <div class="saved-item-name">${list.name}</div>
+                                <div class="saved-item-count">${list.devices.length} devices - Saved: ${new Date(list.updated_at).toLocaleDateString()}</div>
+                            `;
 
-                    savedItem.appendChild(itemInfo);
-                    savedItem.appendChild(deleteBtn);
+                            const deleteBtn = document.createElement('span');
+                            deleteBtn.className = 'delete-saved';
+                            deleteBtn.innerHTML = '✗';
+                            deleteBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                deleteDeviceListItem(list);
+                            };
 
-                    savedItem.onclick = () => confirmLoadDeviceList(listName, listData.devices);
-                    savedListsDiv.appendChild(savedItem);
+                            savedItem.appendChild(itemInfo);
+                            savedItem.appendChild(deleteBtn);
+
+                            savedItem.onclick = () => confirmLoadDeviceList(list.name, list.devices);
+                            savedListsDiv.appendChild(savedItem);
+                        }
+                    }
+                } else {
+                    savedListsDiv.innerHTML = '<em style="color: red;">Error loading device lists</em>';
                 }
+            } catch (error) {
+                console.error('Error loading device lists:', error);
+                savedListsDiv.innerHTML = '<em style="color: red;">Error loading device lists</em>';
             }
 
             document.getElementById('loadDeviceModal').style.display = 'block';
@@ -1350,18 +1907,30 @@
                 }
             }
 
+            // Load devices directly (they already contain hostname | IP format from when they were saved)
             devices = [...deviceList];
             updateDeviceList();
             closeLoadDeviceModal();
-            alert(`Device list "${listName}" loaded successfully!`);
         }
 
-        function deleteDeviceList(listName) {
-            if (confirm(`Delete device list "${listName}"?`)) {
-                let savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
-                delete savedDeviceLists[listName];
-                localStorage.setItem('savedDeviceLists', JSON.stringify(savedDeviceLists));
-                loadDeviceList(); // Refresh the modal
+        async function deleteDeviceListItem(list) {
+            if (!confirm(`Delete device list "${list.name}"?`)) {
+                return;
+            }
+
+            // Delete from database
+            try {
+                const response = await fetch(`/saved-items/api/device-lists/${list.id}/delete`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadDeviceList(); // Refresh the modal
+                } else {
+                    alert(`Error deleting: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error deleting: ${error.message}`);
             }
         }
 
@@ -1380,57 +1949,83 @@
             document.getElementById('commandListName').value = '';
         }
 
-        function confirmSaveCommandList() {
+        async function confirmSaveCommandList() {
             const listName = document.getElementById('commandListName').value.trim();
             if (!listName) {
                 alert('Please enter a list name');
                 return;
             }
 
-            // Save to localStorage
-            let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
-            savedCommandLists[listName] = {
-                commands: [...commands],
-                savedAt: new Date().toISOString()
-            };
-            localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
+            // Save to database via API
+            try {
+                const response = await fetch('/saved-items/api/quick-save-commands', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        commands: commands,
+                        name: listName,
+                        vendor: 'all'
+                    })
+                });
 
-            alert(`Command list "${listName}" saved successfully!`);
-            closeSaveCommandModal();
+                const data = await response.json();
+                if (data.success) {
+                    alert(`Command list "${listName}" saved successfully!`);
+                    closeSaveCommandModal();
+                } else {
+                    alert(`Error saving: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error saving: ${error.message}`);
+            }
         }
 
-        function loadCommandList() {
-            const savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+        async function loadCommandList() {
             const savedListsDiv = document.getElementById('savedCommandLists');
+            savedListsDiv.innerHTML = '<em>Loading...</em>';
 
-            if (Object.keys(savedCommandLists).length === 0) {
-                savedListsDiv.innerHTML = '<em>No saved command lists found...</em>';
-            } else {
-                savedListsDiv.innerHTML = '';
-                for (const [listName, listData] of Object.entries(savedCommandLists)) {
-                    const savedItem = document.createElement('div');
-                    savedItem.className = 'saved-item';
+            // Get all lists from database
+            try {
+                const response = await fetch('/saved-items/api/commands');
+                if (response.ok) {
+                    const dbLists = await response.json();
 
-                    const itemInfo = document.createElement('div');
-                    itemInfo.innerHTML = `
-                        <div class="saved-item-name">${listName}</div>
-                        <div class="saved-item-count">${listData.commands.length} commands - Saved: ${new Date(listData.savedAt).toLocaleDateString()}</div>
-                    `;
+                    if (dbLists.length === 0) {
+                        savedListsDiv.innerHTML = '<em>No saved command lists found...</em>';
+                    } else {
+                        savedListsDiv.innerHTML = '';
+                        for (const list of dbLists) {
+                            const savedItem = document.createElement('div');
+                            savedItem.className = 'saved-item';
 
-                    const deleteBtn = document.createElement('span');
-                    deleteBtn.className = 'delete-saved';
-                    deleteBtn.innerHTML = '✗';
-                    deleteBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        deleteCommandList(listName);
-                    };
+                            const itemInfo = document.createElement('div');
+                            const vendorLabel = list.vendor ? ` [${list.vendor}]` : '';
+                            itemInfo.innerHTML = `
+                                <div class="saved-item-name">${list.name}${vendorLabel}</div>
+                                <div class="saved-item-count">${list.commands.length} commands - Saved: ${new Date(list.updated_at).toLocaleDateString()}</div>
+                            `;
 
-                    savedItem.appendChild(itemInfo);
-                    savedItem.appendChild(deleteBtn);
+                            const deleteBtn = document.createElement('span');
+                            deleteBtn.className = 'delete-saved';
+                            deleteBtn.innerHTML = '✗';
+                            deleteBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                deleteCommandListItem(list);
+                            };
 
-                    savedItem.onclick = () => confirmLoadCommandList(listName, listData.commands);
-                    savedListsDiv.appendChild(savedItem);
+                            savedItem.appendChild(itemInfo);
+                            savedItem.appendChild(deleteBtn);
+
+                            savedItem.onclick = () => confirmLoadCommandList(list.name, list.commands, list.vendor);
+                            savedListsDiv.appendChild(savedItem);
+                        }
+                    }
+                } else {
+                    savedListsDiv.innerHTML = '<em style="color: red;">Error loading command lists</em>';
                 }
+            } catch (error) {
+                console.error('Error loading command lists:', error);
+                savedListsDiv.innerHTML = '<em style="color: red;">Error loading command lists</em>';
             }
 
             document.getElementById('loadCommandModal').style.display = 'block';
@@ -1440,7 +2035,7 @@
             document.getElementById('loadCommandModal').style.display = 'none';
         }
 
-        function confirmLoadCommandList(listName, commandList) {
+        function confirmLoadCommandList(listName, commandList, vendor) {
             if (commands.length > 0) {
                 if (!confirm(`This will replace your current command list (${commands.length} commands). Continue?`)) {
                     return;
@@ -1482,20 +2077,366 @@
             updateCommandList();
             closeLoadCommandModal();
 
+            // Set preferred connector based on vendor if connector dropdown exists
+            const connectorDropdown = document.getElementById('preferredConnector');
+            if (connectorDropdown && vendor && vendor !== 'all') {
+                // Map vendor values to connector values
+                const vendorToConnector = {
+                    'cisco_ios': 'cisco_ios',
+                    'cisco_nxos': 'cisco_nxos',
+                    'cisco_iosxr': 'cisco_iosxr',
+                    'cisco_asa': 'cisco_asa',
+                    'paloalto': 'paloalto_panos',
+                    'fortigate': 'fortinet',
+                    'arista': 'arista_eos',
+                    'juniper': 'juniper_junos'
+                };
+
+                const connectorValue = vendorToConnector[vendor] || vendor;
+                connectorDropdown.value = connectorValue;
+            }
+
             if (validCommands.length > 0) {
-                alert(`Command list "${listName}" loaded with ${validCommands.length} safe command(s)!`);
+                // alert(`Command list "${listName}" loaded with ${validCommands.length} safe command(s)!`);
             } else {
                 alert(`Command list "${listName}" contained no safe commands.`);
             }
         }
 
-        function deleteCommandList(listName) {
-            if (confirm(`Delete command list "${listName}"?`)) {
-                let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
-                delete savedCommandLists[listName];
-                localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
-                loadCommandList(); // Refresh the modal
+        async function deleteCommandListItem(list) {
+            if (!confirm(`Delete command list "${list.name}"?`)) {
+                return;
             }
+
+            // Delete from database
+            try {
+                const response = await fetch(`/saved-items/api/commands/${list.id}/delete`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadCommandList(); // Refresh the modal
+                } else {
+                    alert(`Error deleting: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error deleting: ${error.message}`);
+            }
+        }
+
+        // ===== Manage Device Lists =====
+        async function manageDeviceLists() {
+            const contentDiv = document.getElementById('manageDeviceListsContent');
+            contentDiv.innerHTML = '<em>Loading...</em>';
+            document.getElementById('manageDeviceListsModal').style.display = 'block';
+
+            try {
+                const response = await fetch('/saved-items/api/device-lists');
+                if (!response.ok) throw new Error('Failed to load device lists');
+
+                const lists = await response.json();
+
+                if (lists.length === 0) {
+                    contentDiv.innerHTML = '<p style="text-align: center; color: #666;">No saved device lists in database. Use "Save" button to create one.</p>';
+                } else {
+                    contentDiv.innerHTML = '';
+                    lists.forEach(list => {
+                        contentDiv.appendChild(createManageDeviceItem(list));
+                    });
+                }
+            } catch (error) {
+                contentDiv.innerHTML = `<p style="color: red;">Error loading device lists: ${error.message}</p>`;
+            }
+        }
+
+        function createManageDeviceItem(list) {
+            const container = document.createElement('div');
+            container.className = 'manage-item';
+            container.id = `device-item-${list.id}`;
+
+            const header = document.createElement('div');
+            header.className = 'manage-item-header';
+            header.innerHTML = `
+                <div class="manage-item-title">
+                    ${list.name}
+                    <span style="font-size: 11px; color: #999; margin-left: 10px;">${list.devices.length} device(s)</span>
+                </div>
+                <div class="manage-item-actions">
+                    <button class="btn-sm btn-edit" onclick="editDeviceListItem(${list.id})">Edit</button>
+                    <button class="btn-sm btn-delete" onclick="deleteDeviceListFromManage(${list.id})">Delete</button>
+                </div>
+            `;
+
+            const content = document.createElement('div');
+            content.className = 'manage-item-content';
+            content.id = `device-content-${list.id}`;
+            content.style.display = 'none';
+            content.innerHTML = `
+                <div style="color: #666; font-size: 12px; margin-bottom: 5px;">Devices (one per line):</div>
+                <div style="font-family: monospace; background: white; padding: 8px; border: 1px solid #ddd; border-radius: 3px; max-height: 150px; overflow-y: auto;">
+                    ${list.devices.join('<br>')}
+                </div>
+            `;
+
+            container.appendChild(header);
+            container.appendChild(content);
+            return container;
+        }
+
+        function editDeviceListItem(listId) {
+            const container = document.getElementById(`device-item-${listId}`);
+            const content = document.getElementById(`device-content-${listId}`);
+
+            // Find the list data
+            fetch(`/saved-items/api/device-lists/${listId}`)
+                .then(response => response.json())
+                .then(list => {
+                    container.classList.add('editing');
+                    content.style.display = 'block';
+
+                    content.innerHTML = `
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; color: #666;">Name:</label>
+                            <input type="text" id="edit-device-name-${listId}" value="${list.name}" />
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; color: #666;">Devices (one per line):</label>
+                            <textarea id="edit-device-list-${listId}">${list.devices.join('\n')}</textarea>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn-sm btn-save" onclick="saveDeviceListItem(${listId})">Save Changes</button>
+                            <button class="btn-sm btn-cancel" onclick="cancelEditDeviceListItem(${listId})">Cancel</button>
+                        </div>
+                    `;
+                });
+        }
+
+        function cancelEditDeviceListItem(listId) {
+            const container = document.getElementById(`device-item-${listId}`);
+            const content = document.getElementById(`device-content-${listId}`);
+            container.classList.remove('editing');
+            content.style.display = 'none';
+            manageDeviceLists(); // Refresh to show original content
+        }
+
+        async function saveDeviceListItem(listId) {
+            const name = document.getElementById(`edit-device-name-${listId}`).value.trim();
+            const devicesText = document.getElementById(`edit-device-list-${listId}`).value.trim();
+
+            if (!name) {
+                alert('Please enter a name');
+                return;
+            }
+
+            const devices = devicesText.split('\n').map(d => d.trim()).filter(d => d);
+            if (devices.length === 0) {
+                alert('Please enter at least one device');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/saved-items/api/device-lists/${listId}/update`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name, devices })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // alert('Device list updated successfully!');
+                    manageDeviceLists(); // Refresh the list
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error updating device list: ${error.message}`);
+            }
+        }
+
+        async function deleteDeviceListFromManage(listId) {
+            if (!confirm('Delete this device list?')) return;
+
+            try {
+                const response = await fetch(`/saved-items/api/device-lists/${listId}/delete`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    manageDeviceLists(); // Refresh the list
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error deleting device list: ${error.message}`);
+            }
+        }
+
+        function closeManageDeviceListsModal() {
+            document.getElementById('manageDeviceListsModal').style.display = 'none';
+        }
+
+        // ===== Manage Command Lists =====
+        async function manageCommandLists() {
+            const contentDiv = document.getElementById('manageCommandListsContent');
+            contentDiv.innerHTML = '<em>Loading...</em>';
+            document.getElementById('manageCommandListsModal').style.display = 'block';
+
+            try {
+                const response = await fetch('/saved-items/api/commands');
+                if (!response.ok) throw new Error('Failed to load commands');
+
+                const lists = await response.json();
+
+                if (lists.length === 0) {
+                    contentDiv.innerHTML = '<p style="text-align: center; color: #666;">No saved commands in database. Use "Save" button to create one.</p>';
+                } else {
+                    contentDiv.innerHTML = '';
+                    lists.forEach(list => {
+                        contentDiv.appendChild(createManageCommandItem(list));
+                    });
+                }
+            } catch (error) {
+                contentDiv.innerHTML = `<p style="color: red;">Error loading commands: ${error.message}</p>`;
+            }
+        }
+
+        function createManageCommandItem(list) {
+            const container = document.createElement('div');
+            container.className = 'manage-item';
+            container.id = `command-item-${list.id}`;
+
+            const vendorLabel = list.vendor ? `[${list.vendor}]` : '';
+
+            const header = document.createElement('div');
+            header.className = 'manage-item-header';
+            header.innerHTML = `
+                <div class="manage-item-title">
+                    ${list.name} ${vendorLabel}
+                    <span style="font-size: 11px; color: #999; margin-left: 10px;">${list.commands.length} command(s)</span>
+                </div>
+                <div class="manage-item-actions">
+                    <button class="btn-sm btn-edit" onclick="editCommandListItem(${list.id})">Edit</button>
+                    <button class="btn-sm btn-delete" onclick="deleteCommandListFromManage(${list.id})">Delete</button>
+                </div>
+            `;
+
+            const content = document.createElement('div');
+            content.className = 'manage-item-content';
+            content.id = `command-content-${list.id}`;
+            content.style.display = 'none';
+            content.innerHTML = `
+                <div style="color: #666; font-size: 12px; margin-bottom: 5px;">Commands:</div>
+                <div style="font-family: monospace; background: white; padding: 8px; border: 1px solid #ddd; border-radius: 3px; max-height: 150px; overflow-y: auto;">
+                    ${list.commands.join('<br>')}
+                </div>
+            `;
+
+            container.appendChild(header);
+            container.appendChild(content);
+            return container;
+        }
+
+        function editCommandListItem(listId) {
+            const container = document.getElementById(`command-item-${listId}`);
+            const content = document.getElementById(`command-content-${listId}`);
+
+            fetch(`/saved-items/api/commands/${listId}`)
+                .then(response => response.json())
+                .then(list => {
+                    container.classList.add('editing');
+                    content.style.display = 'block';
+
+                    const vendors = ['all', 'cisco_ios', 'cisco_nxos', 'cisco_iosxr', 'cisco_asa', 'arista', 'juniper', 'paloalto', 'fortigate'];
+                    const vendorOptions = vendors.map(v => `<option value="${v}" ${v === list.vendor ? 'selected' : ''}>${v}</option>`).join('');
+
+                    content.innerHTML = `
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; color: #666;">Name:</label>
+                            <input type="text" id="edit-command-name-${listId}" value="${list.name}" />
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; color: #666;">Vendor:</label>
+                            <select id="edit-command-vendor-${listId}" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+                                ${vendorOptions}
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; color: #666;">Commands (one per line):</label>
+                            <textarea id="edit-command-list-${listId}">${list.commands.join('\n')}</textarea>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn-sm btn-save" onclick="saveCommandListItem(${listId})">Save Changes</button>
+                            <button class="btn-sm btn-cancel" onclick="cancelEditCommandListItem(${listId})">Cancel</button>
+                        </div>
+                    `;
+                });
+        }
+
+        function cancelEditCommandListItem(listId) {
+            const container = document.getElementById(`command-item-${listId}`);
+            const content = document.getElementById(`command-content-${listId}`);
+            container.classList.remove('editing');
+            content.style.display = 'none';
+            manageCommandLists(); // Refresh
+        }
+
+        async function saveCommandListItem(listId) {
+            const name = document.getElementById(`edit-command-name-${listId}`).value.trim();
+            const vendor = document.getElementById(`edit-command-vendor-${listId}`).value;
+            const commandsText = document.getElementById(`edit-command-list-${listId}`).value.trim();
+
+            if (!name) {
+                alert('Please enter a name');
+                return;
+            }
+
+            const commands = commandsText.split('\n').map(c => c.trim()).filter(c => c);
+            if (commands.length === 0) {
+                alert('Please enter at least one command');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/saved-items/api/commands/${listId}/update`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name, vendor, commands })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Command list updated successfully!');
+                    manageCommandLists(); // Refresh
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error updating command list: ${error.message}`);
+            }
+        }
+
+        async function deleteCommandListFromManage(listId) {
+            if (!confirm('Delete this command list?')) return;
+
+            try {
+                const response = await fetch(`/saved-items/api/commands/${listId}/delete`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    manageCommandLists(); // Refresh
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Error deleting command list: ${error.message}`);
+            }
+        }
+
+        function closeManageCommandListsModal() {
+            document.getElementById('manageCommandListsModal').style.display = 'none';
         }
 
         // Save/Load functionality for traceroute targets
@@ -1642,7 +2583,7 @@
 
         // Close modals when clicking outside
         window.onclick = function(event) {
-            const modals = ['saveDeviceModal', 'loadDeviceModal', 'saveCommandModal', 'loadCommandModal', 'saveDnsServerModal', 'loadDnsServerModal', 'saveTracerouteTargetsModal', 'loadTracerouteTargetsModal'];
+            const modals = ['saveDeviceModal', 'loadDeviceModal', 'saveCommandModal', 'loadCommandModal', 'manageDeviceListsModal', 'manageCommandListsModal', 'savedResultsModal', 'saveDnsServerModal', 'loadDnsServerModal', 'saveTracerouteTargetsModal', 'loadTracerouteTargetsModal'];
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
                 if (event.target === modal) {

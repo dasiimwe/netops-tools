@@ -33,7 +33,17 @@ def index():
         'whoami': Settings.get_value('tool_whoami', True)
     }
 
-    return render_template('index.html', tooltip_theme=tooltip_theme, tool_visibility=tool_visibility)
+    # Check if user is authenticated (for database save/load features)
+    user_authenticated = current_user.is_authenticated if current_user else False
+
+    # Get command runner settings
+    show_connector_dropdown = Settings.get_value('show_connector_dropdown', True)
+
+    return render_template('index.html',
+                         tooltip_theme=tooltip_theme,
+                         tool_visibility=tool_visibility,
+                         user_authenticated=user_authenticated,
+                         show_connector_dropdown=show_connector_dropdown)
 
 @main_bp.route('/api/whoami')
 def whoami():
@@ -59,6 +69,75 @@ def whoami():
         pass
 
     return jsonify(response_data)
+
+@main_bp.route('/api/resolve-hostname', methods=['POST'])
+def resolve_hostname():
+    """API endpoint to resolve hostname to IP address or perform reverse DNS for IP"""
+    try:
+        data = request.get_json()
+        hostname = data.get('hostname', '').strip()
+
+        if not hostname:
+            return jsonify({
+                'success': False,
+                'error': 'Hostname is required'
+            }), 400
+
+        # Check if it's already an IP address
+        import re
+        ip_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+        if re.match(ip_pattern, hostname):
+            # It's an IP address - perform reverse DNS lookup
+            ip_address = hostname
+            resolved_hostname = None
+
+            # Try reverse DNS lookup
+            try:
+                resolved_hostname = socket.gethostbyaddr(ip_address)[0]
+            except (socket.herror, socket.gaierror):
+                # Reverse DNS failed, check database
+                from app.models import Device
+                device = Device.query.filter_by(ip_address=ip_address).first()
+                if device and device.name:
+                    resolved_hostname = device.name
+
+            # Return with hostname if found, otherwise just IP
+            if resolved_hostname:
+                return jsonify({
+                    'success': True,
+                    'hostname': resolved_hostname,
+                    'ip': ip_address,
+                    'display': f'{resolved_hostname} | {ip_address}'
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'hostname': ip_address,
+                    'ip': ip_address,
+                    'display': ip_address
+                })
+
+        # It's a hostname - perform forward DNS lookup
+        try:
+            ip_address = socket.gethostbyname(hostname)
+            return jsonify({
+                'success': True,
+                'hostname': hostname,
+                'ip': ip_address,
+                'display': f'{hostname} | {ip_address}'
+            })
+        except socket.gaierror as e:
+            return jsonify({
+                'success': False,
+                'error': f'Unable to resolve hostname: {hostname}',
+                'details': str(e)
+            }), 404
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @main_bp.route('/admin')
 @main_bp.route('/admin/')
@@ -258,16 +337,34 @@ def validate_command_safety(command):
 
     return False, f"Command '{command}' is not in the list of allowed safe commands. Use the Settings page to manage allowed commands."
 
-def get_device_connector(device_ip, username, password):
-    """Get appropriate device connector based on device type detection"""
+def get_device_connector(device_ip, username, password, preferred_connector=None):
+    """Get appropriate device connector based on device type detection
+
+    Args:
+        device_ip: IP address or hostname of the device
+        username: Username for authentication
+        password: Password for authentication
+        preferred_connector: Optional connector type to try first (e.g., 'cisco_ios', 'paloalto_panos')
+    """
     from app.device_connectors.cisco_ios import CiscoIOSConnector
     from app.device_connectors.cisco_nxos import CiscoNXOSConnector
     from app.device_connectors.cisco_iosxr import CiscoIOSXRConnector
     from app.device_connectors.paloalto import PaloAltoConnector
     from app.device_connectors.fortigate import FortiGateConnector
 
-    # Try to detect device type by attempting connections
-    # Start with Cisco IOS as most common
+    # Mapping of connector names to classes
+    connector_map = {
+        'cisco_ios': CiscoIOSConnector,
+        'cisco_nxos': CiscoNXOSConnector,
+        'cisco_iosxr': CiscoIOSXRConnector,
+        'cisco_asa': CiscoIOSConnector,  # ASA uses same connector as IOS
+        'paloalto_panos': PaloAltoConnector,
+        'fortinet': FortiGateConnector,
+        'arista_eos': CiscoIOSConnector,  # Arista typically uses similar commands
+        'juniper_junos': CiscoIOSConnector  # Placeholder - would need specific connector
+    }
+
+    # Default order to try connectors
     connectors_to_try = [
         CiscoIOSConnector,
         CiscoNXOSConnector,
@@ -275,6 +372,14 @@ def get_device_connector(device_ip, username, password):
         PaloAltoConnector,
         FortiGateConnector
     ]
+
+    # If preferred connector is specified, try it first
+    if preferred_connector and preferred_connector in connector_map:
+        preferred_class = connector_map[preferred_connector]
+        # Move preferred connector to front of list
+        if preferred_class in connectors_to_try:
+            connectors_to_try.remove(preferred_class)
+        connectors_to_try.insert(0, preferred_class)
 
     for connector_class in connectors_to_try:
         try:
@@ -293,16 +398,16 @@ def get_device_connector(device_ip, username, password):
 
     return None
 
-def execute_commands_on_device_with_context(app, device_ip, commands, username, password):
+def execute_commands_on_device_with_context(app, device_ip, commands, username, password, preferred_connector=None):
     """Execute commands on a single device within Flask app context"""
     with app.app_context():
-        return execute_commands_on_device(device_ip, commands, username, password)
+        return execute_commands_on_device(device_ip, commands, username, password, preferred_connector)
 
-def execute_commands_on_device(device_ip, commands, username, password):
+def execute_commands_on_device(device_ip, commands, username, password, preferred_connector=None):
     """Execute commands on a single device"""
     try:
         print(f"DEBUG: Attempting to connect to device: {device_ip}")
-        connector = get_device_connector(device_ip, username, password)
+        connector = get_device_connector(device_ip, username, password, preferred_connector)
         if not connector:
             print(f"DEBUG: Failed to get connector for device: {device_ip}")
             return {
@@ -411,6 +516,10 @@ def run_commands():
         commands = data.get('commands', [])
         username = data.get('username', '')
         password = data.get('password', '')
+        preferred_connector = data.get('preferred_connector', '')
+
+        # Extract IP addresses from 'hostname | IP' format
+        device_ips = [extract_device_ip(device) for device in devices]
 
         if not devices or not commands or not username or not password:
             return jsonify({
@@ -448,7 +557,7 @@ def run_commands():
         db.session.commit()
 
         # For testing, let's return sample data if device is 'test'
-        if 'test' in devices:
+        if 'test' in device_ips:
             sample_output = """Interface              IP-Address      OK? Method Status                Protocol
 GigabitEthernet0/0     192.168.1.1     YES NVRAM  up                    up
 GigabitEthernet0/1     10.0.0.1        YES NVRAM  up                    up
@@ -456,9 +565,10 @@ GigabitEthernet0/2     unassigned      YES NVRAM  administratively down down
 Loopback0              172.16.1.1      YES NVRAM  up                    up      """
 
             results = {}
-            for device in devices:
-                if device == 'test':
-                    results[device] = {
+            for i, device_ip in enumerate(device_ips):
+                original_display = devices[i]
+                if device_ip == 'test':
+                    results[original_display] = {
                         'status': 'success',
                         'commands': {
                             cmd: {
@@ -470,8 +580,8 @@ Loopback0              172.16.1.1      YES NVRAM  up                    up      
                     }
                 else:
                     # Continue with normal processing for non-test devices
-                    result = execute_commands_on_device(device, commands, username, password)
-                    results[device] = result
+                    result = execute_commands_on_device(device_ip, commands, username, password, preferred_connector)
+                    results[original_display] = result
 
             return jsonify({
                 'success': True,
@@ -484,17 +594,17 @@ Loopback0              172.16.1.1      YES NVRAM  up                    up      
         app = current_app._get_current_object()  # Get the actual app instance
         with ThreadPoolExecutor(max_workers=5) as executor:
             future_to_device = {
-                executor.submit(execute_commands_on_device_with_context, app, device, commands, username, password): device
-                for device in devices
+                executor.submit(execute_commands_on_device_with_context, app, device_ips[i], commands, username, password, preferred_connector): devices[i]
+                for i in range(len(devices))
             }
 
             for future in future_to_device:
-                device = future_to_device[future]
+                original_display = future_to_device[future]
                 try:
                     result = future.result(timeout=60)  # 60 second timeout per device
-                    results[device] = result
+                    results[original_display] = result
                 except Exception as e:
-                    results[device] = {
+                    results[original_display] = {
                         'status': 'failed',
                         'error': f'Execution timeout or error: {str(e)}'
                     }
@@ -520,15 +630,164 @@ Loopback0              172.16.1.1      YES NVRAM  up                    up      
             'error': str(e)
         })
 
+def extract_device_ip(device_string):
+    """Extract IP address from 'hostname | IP' format or return as-is if already IP"""
+    if ' | ' in device_string:
+        # Format is 'hostname | IP', extract the IP part
+        parts = device_string.split(' | ')
+        return parts[1].strip() if len(parts) > 1 else parts[0].strip()
+    # Already just an IP or hostname
+    return device_string.strip()
+
+@main_bp.route('/api/run-commands-stream', methods=['POST'])
+def run_commands_stream():
+    """API endpoint to run commands on multiple devices with Server-Sent Events streaming"""
+    from flask import Response
+    import json
+    import queue
+    import threading
+
+    try:
+        data = request.get_json()
+        devices = data.get('devices', [])
+        commands = data.get('commands', [])
+        username = data.get('username', '')
+        password = data.get('password', '')
+        preferred_connector = data.get('preferred_connector', '')
+
+        # Extract IP addresses from 'hostname | IP' format
+        device_ips = [extract_device_ip(device) for device in devices]
+
+        if not devices or not commands or not username or not password:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameters'
+            })
+
+        # Validate command safety
+        for command in commands:
+            is_safe, error_message = validate_command_safety(command)
+            if not is_safe:
+                audit_log = AuditLog(
+                    user_id=current_user.id if current_user.is_authenticated else None,
+                    action='command_execution_blocked',
+                    details=f'Blocked unsafe command: "{command}" - {error_message}',
+                    ip_address=request.remote_addr
+                )
+                db.session.add(audit_log)
+                db.session.commit()
+
+                return jsonify({
+                    'success': False,
+                    'error': f'Unsafe command rejected: {error_message}'
+                })
+
+        # Log command execution
+        audit_log = AuditLog(
+            user_id=current_user.id if current_user.is_authenticated else None,
+            action='command_execution_started',
+            details=f'Starting streaming command execution on {len(devices)} device(s): {", ".join(commands)}',
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        # Create a queue for results
+        result_queue = queue.Queue()
+
+        # Create mapping from IP to original display format
+        ip_to_display = {}
+        for i, device in enumerate(devices):
+            ip_to_display[device_ips[i]] = device
+
+        # Get app context before starting threads
+        app = current_app._get_current_object()
+
+        def execute_device_and_queue(device_ip, original_display, app_instance, pref_connector):
+            """Execute commands on a device and put results in queue"""
+            try:
+                # Use app context for database operations
+                with app_instance.app_context():
+                    result = execute_commands_on_device(device_ip, commands, username, password, pref_connector)
+                result_queue.put({
+                    'type': 'device_complete',
+                    'device': original_display,  # Use original display format
+                    'data': result
+                })
+            except Exception as e:
+                result_queue.put({
+                    'type': 'device_complete',
+                    'device': original_display,  # Use original display format
+                    'data': {
+                        'status': 'failed',
+                        'error': f'Execution error: {str(e)}'
+                    }
+                })
+
+        def generate():
+            """Generator function for SSE"""
+            # Start all device executions in parallel
+            threads = []
+
+            for i, device_ip in enumerate(device_ips):
+                original_display = devices[i]
+                thread = threading.Thread(target=execute_device_and_queue, args=(device_ip, original_display, app, preferred_connector))
+                thread.start()
+                threads.append(thread)
+
+            # Send initial status
+            yield f"data: {json.dumps({'type': 'started', 'total_devices': len(devices)})}\n\n"
+
+            # Collect results as they come in
+            devices_completed = 0
+            while devices_completed < len(devices):
+                try:
+                    result = result_queue.get(timeout=120)  # 2 minute timeout
+                    yield f"data: {json.dumps(result)}\n\n"
+                    devices_completed += 1
+                except queue.Empty:
+                    # Timeout - send error for remaining devices
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Timeout waiting for device responses'})}\n\n"
+                    break
+
+            # Wait for all threads to complete
+            for thread in threads:
+                thread.join(timeout=5)
+
+            # Send completion message
+            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 @main_bp.route('/api/download-results', methods=['POST'])
 def download_results():
     """API endpoint to download command results as ZIP file"""
+    import os
     try:
         data = request.get_json()
         results = data.get('results', {})
+        session_name = data.get('session_name', '').strip()
+        filename = data.get('filename', '')
 
         if not results:
             return jsonify({'error': 'No results to download'}), 400
+
+        # Create output directory if it doesn't exist
+        # Use Flask's root_path to get the project root directory
+        project_root = os.path.dirname(current_app.root_path)
+        output_dir = os.path.join(project_root, 'command-run-tool-output')
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Debug logging
+        print(f"DEBUG: Saving results to: {output_dir}")
+        print(f"DEBUG: Project root: {project_root}")
+        print(f"DEBUG: Flask root_path: {current_app.root_path}")
 
         # Create ZIP file in memory
         zip_buffer = io.BytesIO()
@@ -559,9 +818,9 @@ def download_results():
 
                     # Clean device name for filename
                     safe_device_name = re.sub(r'[<>:"/\\|?*]', '_', device)
-                    filename = f"{safe_device_name}_{timestamp}.txt"
+                    device_filename = f"{safe_device_name}_{timestamp}.txt"
 
-                    zip_file.writestr(filename, '\n'.join(device_content))
+                    zip_file.writestr(device_filename, '\n'.join(device_content))
 
                 else:
                     # Create error file for failed devices
@@ -573,18 +832,198 @@ def download_results():
                     ]
 
                     safe_device_name = re.sub(r'[<>:"/\\|?*]', '_', device)
-                    filename = f"{safe_device_name}_{timestamp}_ERROR.txt"
+                    error_filename = f"{safe_device_name}_{timestamp}_ERROR.txt"
 
-                    zip_file.writestr(filename, '\n'.join(error_content))
+                    zip_file.writestr(error_filename, '\n'.join(error_content))
 
+        zip_buffer.seek(0)
+
+        # Save a copy to the server
+        if not filename:
+            filename = f'command_results_{timestamp}.zip'
+
+        server_filepath = os.path.join(output_dir, filename)
+        with open(server_filepath, 'wb') as f:
+            f.write(zip_buffer.getvalue())
+
+        # Debug logging
+        print(f"DEBUG: Saved file to: {server_filepath}")
+        print(f"DEBUG: File exists: {os.path.exists(server_filepath)}")
+        print(f"DEBUG: File size: {os.path.getsize(server_filepath) if os.path.exists(server_filepath) else 'N/A'}")
+
+        # Reset buffer for download
         zip_buffer.seek(0)
 
         return send_file(
             zip_buffer,
             mimetype='application/zip',
             as_attachment=True,
-            download_name=f'command_results_{timestamp}.zip'
+            download_name=filename
         )
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/save-results', methods=['POST'])
+def save_results():
+    """API endpoint to save command results as ZIP file without downloading"""
+    import os
+    try:
+        data = request.get_json()
+        results = data.get('results', {})
+        session_name = data.get('session_name', '').strip()
+        filename = data.get('filename', '')
+
+        if not results:
+            return jsonify({'error': 'No results to save'}), 400
+
+        # Create output directory if it doesn't exist
+        project_root = os.path.dirname(current_app.root_path)
+        output_dir = os.path.join(project_root, 'command-run-tool-output')
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Create ZIP file in memory
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            for device, device_data in results.items():
+                if device_data.get('status') == 'success':
+                    # Create a file for each device
+                    device_content = []
+                    device_content.append(f"Device: {device}")
+                    device_content.append(f"Timestamp: {datetime.now().isoformat()}")
+                    device_content.append("=" * 50)
+                    device_content.append("")
+
+                    for command, command_data in device_data.get('commands', {}).items():
+                        device_content.append(f"Command: {command}")
+                        device_content.append("-" * 30)
+                        device_content.append("")
+
+                        # Use translated output if available, otherwise raw output
+                        output = command_data.get('translated_output') or command_data.get('output', '')
+                        device_content.append(output)
+                        device_content.append("")
+                        device_content.append("=" * 50)
+                        device_content.append("")
+
+                    # Clean device name for filename
+                    safe_device_name = re.sub(r'[<>:"/\\|?*]', '_', device)
+                    device_filename = f"{safe_device_name}_{timestamp}.txt"
+
+                    zip_file.writestr(device_filename, '\n'.join(device_content))
+
+                else:
+                    # Create error file for failed devices
+                    error_content = [
+                        f"Device: {device}",
+                        f"Timestamp: {datetime.now().isoformat()}",
+                        f"Status: FAILED",
+                        f"Error: {device_data.get('error', 'Unknown error')}"
+                    ]
+
+                    safe_device_name = re.sub(r'[<>:"/\\|?*]', '_', device)
+                    error_filename = f"{safe_device_name}_{timestamp}_ERROR.txt"
+
+                    zip_file.writestr(error_filename, '\n'.join(error_content))
+
+        # Determine filename
+        if not filename:
+            filename = f'command_results_{timestamp}.zip'
+
+        # Save to server
+        server_filepath = os.path.join(output_dir, filename)
+        with open(server_filepath, 'wb') as f:
+            f.write(zip_buffer.getvalue())
+
+        print(f"DEBUG: Saved file to: {server_filepath}")
+        print(f"DEBUG: File exists: {os.path.exists(server_filepath)}")
+        print(f"DEBUG: File size: {os.path.getsize(server_filepath) if os.path.exists(server_filepath) else 'N/A'}")
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'filepath': server_filepath
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/saved-results', methods=['GET'])
+def list_saved_results():
+    """API endpoint to list all saved command results"""
+    import os
+    try:
+        project_root = os.path.dirname(current_app.root_path)
+        output_dir = os.path.join(project_root, 'command-run-tool-output')
+
+        if not os.path.exists(output_dir):
+            return jsonify([])
+
+        results = []
+        for filename in os.listdir(output_dir):
+            if filename.endswith('.zip'):
+                filepath = os.path.join(output_dir, filename)
+                file_stats = os.stat(filepath)
+
+                results.append({
+                    'filename': filename,
+                    'size': file_stats.st_size,
+                    'created': datetime.fromtimestamp(file_stats.st_ctime).isoformat(),
+                    'modified': datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+                })
+
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/saved-results/<filename>', methods=['GET'])
+def download_saved_result(filename):
+    """API endpoint to download a specific saved result file"""
+    import os
+    try:
+        # Security: prevent directory traversal
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        project_root = os.path.dirname(current_app.root_path)
+        output_dir = os.path.join(project_root, 'command-run-tool-output')
+        filepath = os.path.join(output_dir, filename)
+
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+
+        return send_file(
+            filepath,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/saved-results/<filename>', methods=['DELETE'])
+def delete_saved_result(filename):
+    """API endpoint to delete a specific saved result file"""
+    import os
+    try:
+        # Security: prevent directory traversal
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        project_root = os.path.dirname(current_app.root_path)
+        output_dir = os.path.join(project_root, 'command-run-tool-output')
+        filepath = os.path.join(output_dir, filename)
+
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+
+        os.remove(filepath)
+        return jsonify({'success': True, 'message': f'Deleted {filename}'})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

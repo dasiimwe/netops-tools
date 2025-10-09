@@ -336,7 +336,7 @@ class SessionLog(db.Model):
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'))
@@ -344,6 +344,63 @@ class AuditLog(db.Model):
     details = db.Column(db.Text)
     ip_address = db.Column(db.String(45))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<AuditLog {self.action} at {self.timestamp}>'
+
+class SavedDeviceList(db.Model):
+    __tablename__ = 'saved_device_lists'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    devices = db.Column(db.Text, nullable=False)  # JSON array of device IP/hostnames
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    creator = db.relationship('User', backref='saved_device_lists')
+
+    def get_devices_list(self):
+        """Get devices as a Python list"""
+        try:
+            return json.loads(self.devices)
+        except:
+            return []
+
+    def set_devices_list(self, devices_list):
+        """Set devices from a Python list"""
+        self.devices = json.dumps(devices_list)
+
+    def __repr__(self):
+        return f'<SavedDeviceList {self.name}>'
+
+class SavedCommand(db.Model):
+    __tablename__ = 'saved_commands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    commands = db.Column(db.Text, nullable=False)  # JSON array of commands
+    vendor = db.Column(db.String(50))  # Optional: cisco_ios, cisco_nxos, etc. or 'all' for vendor-agnostic
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    creator = db.relationship('User', backref='saved_commands')
+
+    def get_commands_list(self):
+        """Get commands as a Python list"""
+        try:
+            return json.loads(self.commands)
+        except:
+            return []
+
+    def set_commands_list(self, commands_list):
+        """Set commands from a Python list"""
+        self.commands = json.dumps(commands_list)
+
+    def __repr__(self):
+        return f'<SavedCommand {self.name}>'

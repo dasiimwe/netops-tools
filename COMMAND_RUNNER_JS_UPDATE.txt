@@ -1,0 +1,190 @@
+// Add this JavaScript to index.html to replace the existing save/load functions
+// Location: Around line 1359-1500
+
+// Delete device list (handles both browser and database)
+async function deleteDeviceListItem(list) {
+    if (!confirm(`Delete device list "${list.name}"?`)) {
+        return;
+    }
+
+    if (list.source === 'database' && list.id) {
+        // Delete from database
+        try {
+            const response = await fetch(`/saved-items/api/device-lists/${list.id}/delete`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadDeviceList(); // Refresh the modal
+            } else {
+                alert(`Error deleting from database: ${data.error}`);
+            }
+        } catch (error) {
+            alert(`Error deleting from database: ${error.message}`);
+        }
+    } else {
+        // Delete from localStorage
+        let savedDeviceLists = JSON.parse(localStorage.getItem('savedDeviceLists') || '{}');
+        delete savedDeviceLists[list.name];
+        localStorage.setItem('savedDeviceLists', JSON.stringify(savedDeviceLists));
+        loadDeviceList(); // Refresh the modal
+    }
+}
+
+// Save command list
+async function confirmSaveCommandList() {
+    const listName = document.getElementById('commandListName').value.trim();
+    if (!listName) {
+        alert('Please enter a list name');
+        return;
+    }
+
+    if (userAuthenticated) {
+        // Save to database via API
+        try {
+            const response = await fetch('/saved-items/api/quick-save-commands', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    commands: commands,
+                    name: listName,
+                    vendor: 'all'
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert(`Command list "${listName}" saved to database successfully!`);
+                closeSaveCommandModal();
+            } else {
+                alert(`Error saving to database: ${data.error}\nFalling back to browser storage.`);
+                saveCommandToLocalStorage();
+            }
+        } catch (error) {
+            alert(`Error saving to database: ${error.message}\nFalling back to browser storage.`);
+            saveCommandToLocalStorage();
+        }
+    } else {
+        saveCommandToLocalStorage();
+    }
+
+    function saveCommandToLocalStorage() {
+        let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+        savedCommandLists[listName] = {
+            commands: [...commands],
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
+        alert(`Command list "${listName}" saved to browser storage!`);
+        closeSaveCommandModal();
+    }
+}
+
+// Load command list
+async function loadCommandList() {
+    const savedListsDiv = document.getElementById('savedCommandLists');
+    savedListsDiv.innerHTML = '<em>Loading...</em>';
+
+    // Combine localStorage and database lists
+    const allLists = [];
+
+    // Get localStorage lists
+    const localLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+    for (const [listName, listData] of Object.entries(localLists)) {
+        allLists.push({
+            id: null,
+            name: listName,
+            commands: listData.commands,
+            savedAt: listData.savedAt,
+            source: 'browser',
+            vendor: null
+        });
+    }
+
+    // Get database lists if authenticated
+    if (userAuthenticated) {
+        try {
+            const apiResponse = await fetch('/saved-items/api/commands');
+            if (apiResponse.ok) {
+                const dbLists = await apiResponse.json();
+                for (const list of dbLists) {
+                    allLists.push({
+                        id: list.id,
+                        name: list.name,
+                        commands: list.commands,
+                        savedAt: list.updated_at,
+                        source: 'database',
+                        vendor: list.vendor
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading database command lists:', error);
+        }
+    }
+
+    // Display all lists
+    if (allLists.length === 0) {
+        savedListsDiv.innerHTML = '<em>No saved command lists found...</em>';
+    } else {
+        savedListsDiv.innerHTML = '';
+        for (const list of allLists) {
+            const savedItem = document.createElement('div');
+            savedItem.className = 'saved-item';
+
+            const itemInfo = document.createElement('div');
+            const sourceLabel = list.source === 'database' ? '💾 DB' : '🌐 Browser';
+            const vendorLabel = list.vendor ? ` [${list.vendor}]` : '';
+            itemInfo.innerHTML = `
+                <div class="saved-item-name">${list.name}${vendorLabel} <span style="font-size: 10px; color: #666;">${sourceLabel}</span></div>
+                <div class="saved-item-count">${list.commands.length} commands - Saved: ${new Date(list.savedAt).toLocaleDateString()}</div>
+            `;
+
+            const deleteBtn = document.createElement('span');
+            deleteBtn.className = 'delete-saved';
+            deleteBtn.innerHTML = '✗';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteCommandListItem(list);
+            };
+
+            savedItem.appendChild(itemInfo);
+            savedItem.appendChild(deleteBtn);
+
+            savedItem.onclick = () => confirmLoadCommandList(list.name, list.commands);
+            savedListsDiv.appendChild(savedItem);
+        }
+    }
+
+    document.getElementById('loadCommandModal').style.display = 'block';
+}
+
+// Delete command list (handles both browser and database)
+async function deleteCommandListItem(list) {
+    if (!confirm(`Delete command list "${list.name}"?`)) {
+        return;
+    }
+
+    if (list.source === 'database' && list.id) {
+        // Delete from database
+        try {
+            const response = await fetch(`/saved-items/api/commands/${list.id}/delete`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadCommandList(); // Refresh the modal
+            } else {
+                alert(`Error deleting from database: ${data.error}`);
+            }
+        } catch (error) {
+            alert(`Error deleting from database: ${error.message}`);
+        }
+    } else {
+        // Delete from localStorage
+        let savedCommandLists = JSON.parse(localStorage.getItem('savedCommandLists') || '{}');
+        delete savedCommandLists[list.name];
+        localStorage.setItem('savedCommandLists', JSON.stringify(savedCommandLists));
+        loadCommandList(); // Refresh the modal
+    }
+}

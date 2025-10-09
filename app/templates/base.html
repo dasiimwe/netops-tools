@@ -188,6 +188,19 @@
                             </a>
                         </li>
 
+                        <!-- Saved Items Section -->
+                        <li><div class="sidebar-heading">Saved Items</div></li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'saved_items.list_device_lists' %}active{% endif %}" href="{{ url_for('saved_items.list_device_lists') }}">
+                                <i class="bi bi-list-ul"></i> Device Lists
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'saved_items.list_commands' %}active{% endif %}" href="{{ url_for('saved_items.list_commands') }}">
+                                <i class="bi bi-terminal"></i> Commands
+                            </a>
+                        </li>
+
                         <!-- Authentication Section -->
                         <li><div class="sidebar-heading">Authentication</div></li>
                         <li class="nav-item">

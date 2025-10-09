@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Command Set{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Edit Command Set</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" value="{{ saved_command.name }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="2">{{ saved_command.description or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="vendor" class="form-label">Vendor</label>
+                            <select class="form-control" id="vendor" name="vendor">
+                                {% for v in vendors %}
+                                <option value="{{ v }}" {% if saved_command.vendor == v %}selected{% endif %}>{{ v }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Select 'all' for vendor-agnostic commands</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="commands" class="form-label">Commands * (one per line)</label>
+                            <textarea class="form-control" id="commands" name="commands" rows="10" required>{{ commands_text }}</textarea>
+                            <small class="form-text text-muted">Enter commands, one per line</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('saved_items.list_commands') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Update Command Set</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -206,3 +206,5 @@ temp/
 # Template files (generated dynamically)
 *_template.csv
 device_import_template.csv
+*.zip
+*.tar.gz

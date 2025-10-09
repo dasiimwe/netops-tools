@@ -1,0 +1,49 @@
+==================================================
+DATABASE MIGRATION INSTRUCTIONS
+==================================================
+
+To apply the Saved Device Lists & Commands migration:
+
+OPTION 1 - Using the bash script:
+---------------------------------
+bash RUN_MIGRATION.sh
+
+(NOT: python RUN_MIGRATION.sh - that won't work!)
+
+
+OPTION 2 - Manual steps:
+------------------------
+1. Activate the virtual environment:
+   source venv/bin/activate
+
+2. Run the migration:
+   flask db upgrade
+
+3. Deactivate when done:
+   deactivate
+
+
+OPTION 3 - If venv is already activated:
+----------------------------------------
+flask db upgrade
+
+
+VERIFICATION:
+------------
+After migration, you should see:
+- No errors in the output
+- Tables created: saved_device_lists, saved_commands
+- Navigation links appear in the sidebar when you refresh the app
+
+TROUBLESHOOTING:
+---------------
+If you see: "Could not build url for endpoint 'saved_items.list_device_lists'"
+- Restart your Flask application after migration
+- The blueprint needs to be loaded with the new routes
+
+If migration fails:
+- Check that venv is activated
+- Verify Flask is installed: pip list | grep Flask
+- Check database connection in config
+
+==================================================

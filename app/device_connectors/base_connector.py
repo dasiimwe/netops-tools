@@ -152,19 +152,24 @@ class BaseConnector(ABC):
         except Exception as e:
             error_msg = str(e).lower()
 
-            # Handle "pattern not detected" errors for Cisco devices
+            # Handle "pattern not detected" errors
             if "pattern" in error_msg and "not" in error_msg:
                 logger.warning(f"Pattern detection failed for '{command}' on {self.host}, trying alternative method")
 
                 try:
-                    # Try with extended timeout and different parameters
-                    output = self.connection.send_command(
-                        command,
-                        expect_string=r'#',
-                        read_timeout=60,
-                        strip_prompt=False,
-                        strip_command=False
-                    )
+                    # For Palo Alto devices, use timing-based method immediately with lower delay
+                    if self.device_type == 'paloalto_panos':
+                        logger.info(f"Using optimized timing method for Palo Alto device {self.host}")
+                        output = self.connection.send_command_timing(command, delay_factor=0.5)
+                    else:
+                        # For other devices, try with extended timeout and different parameters
+                        output = self.connection.send_command(
+                            command,
+                            expect_string=r'#',
+                            read_timeout=60,
+                            strip_prompt=False,
+                            strip_command=False
+                        )
 
                     # Clean up the output
                     if output:
@@ -184,7 +189,8 @@ class BaseConnector(ABC):
                     # Try one more time with send_command_timing (no prompt detection)
                     try:
                         logger.warning(f"Trying timing-based method for '{command}' on {self.host}")
-                        output = self.connection.send_command_timing(command, delay_factor=2)
+                        # Reduce delay_factor from 2 to 1 for faster execution
+                        output = self.connection.send_command_timing(command, delay_factor=1)
 
                         # Clean up output
                         if output:

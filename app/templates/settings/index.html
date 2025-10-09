@@ -361,6 +361,20 @@
                     </div>
                 </div>
 
+                <h6 class="mt-4 mb-3">Command Runner Settings</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="show_connector_dropdown" name="show_connector_dropdown"
+                                   {% if settings.show_connector_dropdown is not defined or settings.show_connector_dropdown %}checked{% endif %}>
+                            <label class="form-check-label" for="show_connector_dropdown">
+                                <strong>Show Device Connector Dropdown</strong>
+                            </label>
+                            <div class="form-text">Allow users to select preferred device connector in Command Run Tool</div>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-eye"></i> Update Tool Visibility
                 </button>

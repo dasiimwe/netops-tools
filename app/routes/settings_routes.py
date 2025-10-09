@@ -44,7 +44,9 @@ def index():
         'tool_traceroute': Settings.get_value('tool_traceroute', True),
         'tool_url_insights': Settings.get_value('tool_url_insights', True),
         'tool_tcp_handshake': Settings.get_value('tool_tcp_handshake', True),
-        'tool_whoami': Settings.get_value('tool_whoami', True)
+        'tool_whoami': Settings.get_value('tool_whoami', True),
+        # Command runner settings
+        'show_connector_dropdown': Settings.get_value('show_connector_dropdown', True)
     }
 
     # Get credential pool data for template
@@ -200,6 +202,11 @@ def update():
                           request.form.get('tool_whoami') == 'on',
                           'bool',
                           'Show WhoAmI tool on home page')
+
+        Settings.set_value('show_connector_dropdown',
+                          request.form.get('show_connector_dropdown') == 'on',
+                          'bool',
+                          'Show device connector dropdown in Command Run Tool')
 
     # Update default credential pool setting (check form_id)
     if request.form.get('form_id') == 'credentials':

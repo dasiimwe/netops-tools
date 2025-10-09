@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Saved Commands{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Saved Commands</h2>
+        <a href="{{ url_for('saved_items.create_command') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Command Set
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if commands %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Vendor</th>
+                            <th>Commands</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cmd in commands %}
+                        <tr>
+                            <td><strong>{{ cmd.name }}</strong></td>
+                            <td>{{ cmd.description or '-' }}</td>
+                            <td>
+                                {% if cmd.vendor %}
+                                <span class="badge bg-secondary">{{ cmd.vendor }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark">all</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-info">{{ cmd.get_commands_list()|length }} command(s)</span></td>
+                            <td>{{ cmd.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ cmd.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <a href="{{ url_for('saved_items.edit_command', command_id=cmd.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <form method="POST" action="{{ url_for('saved_items.delete_command', command_id=cmd.id) }}" style="display: inline;" onsubmit="return confirm('Delete this command set?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-terminal fa-3x mb-3"></i>
+                <p>No saved commands yet. Create one to get started!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

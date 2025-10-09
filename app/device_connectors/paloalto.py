@@ -8,15 +8,59 @@ logger = logging.getLogger(__name__)
 
 class PaloAltoConnector(BaseConnector):
     """Connector for Palo Alto Networks devices"""
-    
+
     def get_netmiko_device_type(self) -> str:
         return 'paloalto_panos'
-    
+
     def get_interface_commands(self) -> List[str]:
         return [
             'show interface all',
             'show interface logical'
         ]
+
+    def execute_command(self, command: str) -> str:
+        """Execute command on Palo Alto device with optimized prompt detection"""
+        if not self.connection:
+            raise RuntimeError(f"Not connected to {self.host}")
+
+        from datetime import datetime
+        start_time = datetime.now()
+        self._log_session_event('command_sent', command=command)
+
+        try:
+            # Palo Alto devices use '>' or '#' prompts
+            # Use send_command_timing for faster, more reliable execution
+            output = self.connection.send_command_timing(
+                command,
+                delay_factor=0.5,  # Reduced delay for faster response
+                max_loops=150
+            )
+
+            # Clean up output - remove command echo and prompt
+            if output:
+                lines = output.split('\n')
+                cleaned_lines = []
+                for i, line in enumerate(lines):
+                    # Skip first line if it's the command echo
+                    if i == 0 and command.strip() in line:
+                        continue
+                    # Skip lines that are just prompts
+                    stripped = line.strip()
+                    if stripped and not (stripped.endswith('>') or stripped.endswith('#')) or ' ' in stripped:
+                        cleaned_lines.append(line.rstrip())
+
+                output = '\n'.join(cleaned_lines)
+
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            self._log_session_event('command_response', command=command, response=output, duration_ms=duration_ms)
+            logger.info(f"Command '{command}' completed on {self.host} in {duration_ms}ms")
+            return output
+
+        except Exception as e:
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            self._log_session_event('command_failed', command=command, error_message=str(e), duration_ms=duration_ms)
+            logger.error(f"Error executing command '{command}' on {self.host}: {str(e)}")
+            raise
     
     def parse_interfaces(self, command_outputs: Dict[str, str], progress_callback=None) -> List[Dict]:
         interfaces = {}
