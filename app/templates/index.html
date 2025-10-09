@@ -209,8 +209,11 @@
         {% if tool_visibility.url_insights %}
         <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}" onclick="showTab('url-insights')">URL/App Insights</div>
         {% endif %}
+        {% if tool_visibility.tcp_handshake %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}" onclick="showTab('tcp-handshake')">TCP Handshake</div>
+        {% endif %}
         {% if tool_visibility.whoami %}
-        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}" onclick="showTab('whoami')">WhoAmI</div>
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}" onclick="showTab('whoami')">WhoAmI</div>
         {% endif %}
     </div>
 
@@ -467,111 +470,174 @@
     <!-- URL/App Insights Tab -->
     {% if tool_visibility.url_insights %}
     <div id="url-insights" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}">
-        <p>URL/App Insights - Browser-based Diagnostics</p>
+        <p>URL Insights - Server-side Curl Diagnostics</p>
 
         <div style="margin-bottom: 20px;">
-            <label><strong>URL to Analyze:</strong></label><br>
-            <input type="url" id="urlInsightsInput" placeholder="https://example.com"
-                   style="width: 60%; padding: 8px; font-family: monospace;">
-            <button onclick="analyzeURL()" style="padding: 8px 16px; background: #007cba; color: white; border: none; cursor: pointer; margin-left: 10px;">Analyze</button>
-            <button onclick="clearURLAnalysis()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; margin-left: 5px;">Clear</button>
-            <br>
-            <small style="color: #666;">Enter a full URL including http:// or https://</small>
-        </div>
-
-        <!-- Dual pane layout -->
-        <div style="display: flex; gap: 20px; height: 600px;">
-            <!-- Left pane: Content Display -->
-            <div style="flex: 1; border: 1px solid #ccc; background: white; position: relative;">
-                <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between;">
-                    <strong>Content Display</strong>
-                    <span id="contentStatus" style="color: #666; font-size: 12px;">No URL loaded</span>
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="flex: 1;">
+                    <label><strong>URL to Analyze:</strong></label><br>
+                    <input type="url" id="urlInsightsInput" placeholder="https://example.com"
+                           style="width: 100%; padding: 8px; font-family: monospace;">
                 </div>
-                <div id="urlInsightsContent" style="height: calc(100% - 35px); overflow: auto; padding: 20px; background: #f9f9f9;">
-                    <div id="urlPreview" style="text-align: center; color: #666; padding-top: 100px;">
-                        <div style="font-size: 48px; margin-bottom: 20px;">🌐</div>
-                        <p style="font-size: 16px; margin-bottom: 10px;">Enter a URL to begin analysis</p>
-                        <p style="font-size: 12px; color: #999;">Click "Analyze" to open the URL and capture diagnostics</p>
-                    </div>
-                    <div id="urlInfo" style="display: none;">
-                        <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
-                            <h4 style="margin: 0 0 10px 0; color: #333;">URL Information</h4>
-                            <div style="font-family: monospace; font-size: 12px;">
-                                <p><strong>URL:</strong> <span id="analyzed-url"></span></p>
-                                <p><strong>Protocol:</strong> <span id="analyzed-protocol"></span></p>
-                                <p><strong>Hostname:</strong> <span id="analyzed-hostname"></span></p>
-                                <p><strong>Port:</strong> <span id="analyzed-port"></span></p>
-                            </div>
+                <div style="padding-top: 24px;">
+                    <button onclick="analyzeCurlURL()" style="padding: 8px 16px; background: #007cba; color: white; border: none; cursor: pointer;">Analyze</button>
+                    <button onclick="clearCurlAnalysis()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; margin-left: 5px;">Clear</button>
+                </div>
+            </div>
+
+            <!-- Advanced Options Toggle -->
+            <div style="margin-top: 10px;">
+                <button onclick="toggleCurlOptions()" style="padding: 6px 12px; background: #f0f0f0; border: 1px solid #ccc; cursor: pointer;">
+                    <span id="curlOptionsToggleIcon">▶</span> Advanced Curl Options
+                </button>
+            </div>
+
+            <!-- Advanced Curl Options Panel -->
+            <div id="curlOptionsPanel" style="display: none; margin-top: 10px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <!-- Left Column -->
+                    <div>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="curlFollowRedirects" checked>
+                                Follow Redirects (-L)
+                            </label>
                         </div>
-                        <div style="background: #e7f3ff; padding: 12px; border: 1px solid #007cba; border-radius: 4px;">
-                            <p style="margin: 0; font-size: 13px;">
-                                ℹ️ <strong>Note:</strong> The URL has been opened in a new tab. Check the Diagnostics panel for connection details.
-                            </p>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="curlIncludeHeaders" checked>
+                                Include Headers (-i)
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="curlHeadersOnly" checked>
+                                Headers Only (-I)
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="curlVerbose" checked>
+                                Verbose Output (-v)
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label><strong>Request Method:</strong></label><br>
+                            <select id="curlMethod" style="width: 100%; padding: 6px;">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                                <option value="HEAD">HEAD</option>
+                                <option value="OPTIONS">OPTIONS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div>
+                        <div style="margin-bottom: 10px;">
+                            <label><strong>User Agent:</strong></label><br>
+                            <select id="curlUserAgent" style="width: 100%; padding: 6px; font-size: 12px;">
+                                <option value="">Default (curl)</option>
+                                <option value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36">Chrome (Windows)</option>
+                                <option value="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36">Chrome (macOS)</option>
+                                <option value="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0">Firefox (Windows)</option>
+                                <option value="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0">Firefox (macOS)</option>
+                                <option value="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15">Safari (macOS)</option>
+                                <option value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0">Edge (Windows)</option>
+                                <option value="Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1">Safari (iPhone)</option>
+                                <option value="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36">Chrome (Android)</option>
+                                <option value="curl/8.4.0">curl/8.4.0</option>
+                                <option value="Googlebot/2.1 (+http://www.google.com/bot.html)">Googlebot</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label><strong>Max Time (seconds):</strong></label><br>
+                            <input type="number" id="curlMaxTime" value="30" min="1" max="300" style="width: 100%; padding: 6px;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label><strong>Custom Headers:</strong></label><br>
+                            <div id="customHeadersList" style="margin-top: 5px;">
+                                <!-- Headers will be added here dynamically -->
+                            </div>
+                            <button onclick="addCustomHeader()" style="padding: 4px 8px; font-size: 12px; margin-top: 5px;">+ Add Header</button>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Right pane: Diagnostics -->
-            <div style="flex: 1; border: 1px solid #ccc; background: white; display: flex; flex-direction: column;">
-                <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between;">
-                    <strong>Diagnostics</strong>
-                    <button id="exportInsightsBtn" onclick="exportInsights()" style="display: none; padding: 4px 8px; font-size: 12px; cursor: pointer;">Export</button>
+        <!-- Single pane layout for curl output -->
+        <div style="border: 1px solid #ccc; background: white;">
+            <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>Curl Output</strong>
+                    <span id="curlStatus" style="margin-left: 15px; color: #666; font-size: 12px;">Ready</span>
                 </div>
-
-                <!-- Tab buttons -->
-                <div style="display: flex; border-bottom: 1px solid #ccc; background: #f9f9f9;">
-                    <div class="insights-tab active" onclick="showInsightsTab('overview')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">Overview</div>
-                    <div class="insights-tab" onclick="showInsightsTab('requests')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">Requests</div>
-                    <div class="insights-tab" onclick="showInsightsTab('tls')" style="padding: 8px 16px; cursor: pointer; border-right: 1px solid #ccc;">TLS/SSL</div>
-                    <div class="insights-tab" onclick="showInsightsTab('timeline')" style="padding: 8px 16px; cursor: pointer;">Timeline</div>
+                <div>
+                    <span id="curlCommand" style="font-family: monospace; font-size: 11px; color: #666; margin-right: 15px;"></span>
+                    <button id="exportCurlBtn" onclick="exportCurlOutput()" style="display: none; padding: 4px 8px; font-size: 12px; cursor: pointer;">Export</button>
                 </div>
-
-                <!-- Tab content areas -->
-                <div style="flex: 1; overflow-y: auto; padding: 10px;">
-                    <!-- Overview tab -->
-                    <div id="overview-content" class="insights-tab-content">
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
-                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
-                                <div id="stat-total-requests" style="font-size: 20px; font-weight: bold; color: #007cba;">0</div>
-                                <div style="font-size: 11px; color: #666;">REQUESTS</div>
-                            </div>
-                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
-                                <div id="stat-total-size" style="font-size: 20px; font-weight: bold; color: #007cba;">0 B</div>
-                                <div style="font-size: 11px; color: #666;">TOTAL SIZE</div>
-                            </div>
-                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
-                                <div id="stat-load-time" style="font-size: 20px; font-weight: bold; color: #007cba;">-</div>
-                                <div style="font-size: 11px; color: #666;">LOAD TIME</div>
-                            </div>
-                            <div style="background: #f0f0f0; padding: 10px; text-align: center; border: 1px solid #ddd;">
-                                <div id="stat-status-code" style="font-size: 20px; font-weight: bold; color: #007cba;">-</div>
-                                <div style="font-size: 11px; color: #666;">STATUS</div>
-                            </div>
-                        </div>
-                        <div style="font-family: monospace; font-size: 12px; line-height: 1.6;">
-                            <div style="padding: 8px; background: #e7f3ff; border-left: 3px solid #007cba; margin-bottom: 5px;">
-                                ℹ Ready to analyze URLs<br>
-                                <small style="color: #666;">Connection diagnostics will appear here</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Requests tab -->
-                    <div id="requests-content" class="insights-tab-content">
-                        <em style="color: #666;">No requests captured yet...</em>
-                    </div>
-
-                    <!-- TLS/SSL tab -->
-                    <div id="tls-content" class="insights-tab-content">
-                        <em style="color: #666;">No TLS information available...</em>
-                    </div>
-
-                    <!-- Timeline tab -->
-                    <div id="timeline-content" class="insights-tab-content">
-                        <em style="color: #666;">No timeline events yet...</em>
-                    </div>
+            </div>
+            <div id="curlOutputContainer" style="height: 600px; overflow: auto; padding: 15px; background: #1e1e1e; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; color: #d4d4d4;">
+                <div id="curlPlaceholder" style="text-align: center; color: #888; padding-top: 200px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📡</div>
+                    <p style="font-size: 16px; margin-bottom: 10px;">Enter a URL and click "Analyze"</p>
+                    <p style="font-size: 12px; color: #666;">Server-side curl will execute and stream output here in real-time</p>
                 </div>
+                <div id="curlOutput" style="display: none; white-space: pre-wrap; word-wrap: break-word;"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TCP Handshake Tab -->
+    {% if tool_visibility.tcp_handshake %}
+    <div id="tcp-handshake" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}">
+        <p>TCP 3-Way Handshake Analyzer</p>
+
+        <div style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label><strong>Target IP or Domain:</strong></label><br>
+                    <input type="text" id="tcpHandshakeTarget" placeholder="example.com or 192.168.1.1"
+                           style="width: 100%; padding: 8px; font-family: monospace;">
+                </div>
+                <div style="width: 150px;">
+                    <label><strong>Port:</strong></label><br>
+                    <input type="number" id="tcpHandshakePort" value="80" min="1" max="65535"
+                           style="width: 100%; padding: 8px; font-family: monospace;">
+                </div>
+                <div style="padding-top: 24px;">
+                    <button onclick="captureTCPHandshake()" style="padding: 8px 16px; background: #007cba; color: white; border: none; cursor: pointer;">Capture</button>
+                    <button onclick="clearTCPHandshake()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; margin-left: 5px;">Clear</button>
+                </div>
+            </div>
+            <small style="color: #666; display: block; margin-top: 5px;">
+                ⚠️ Note: This tool requires tcpdump and may need elevated permissions (sudo/root)
+            </small>
+        </div>
+
+        <!-- Output Display -->
+        <div style="border: 1px solid #ccc; background: white;">
+            <div style="background: #f0f0f0; padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>Packet Capture</strong>
+                    <span id="tcpStatus" style="margin-left: 15px; color: #666; font-size: 12px;">Ready</span>
+                </div>
+                <div>
+                    <span id="tcpCommand" style="font-family: monospace; font-size: 11px; color: #666; margin-right: 15px;"></span>
+                    <button id="exportTCPBtn" onclick="exportTCPOutput()" style="display: none; padding: 4px 8px; font-size: 12px; cursor: pointer;">Export</button>
+                </div>
+            </div>
+            <div id="tcpOutputContainer" style="height: 600px; overflow: auto; padding: 15px; background: #1e1e1e; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; color: #d4d4d4;">
+                <div id="tcpPlaceholder" style="text-align: center; color: #888; padding-top: 200px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">🔌</div>
+                    <p style="font-size: 16px; margin-bottom: 10px;">Enter a target and port, then click "Capture"</p>
+                    <p style="font-size: 12px; color: #666;">View the TCP 3-way handshake (SYN, SYN-ACK, ACK) in real-time</p>
+                </div>
+                <div id="tcpOutput" style="display: none; white-space: pre-wrap; word-wrap: break-word;"></div>
             </div>
         </div>
     </div>
@@ -579,7 +645,7 @@
 
     <!-- WhoAmI Tab -->
     {% if tool_visibility.whoami %}
-    <div id="whoami" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}">
+    <div id="whoami" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}">
         <p></p>
 
         <div style="max-width: 50%; margin: 0 auto;">
@@ -2820,10 +2886,10 @@
             tooltip.addEventListener('mouseenter', cancelHideTooltip);
             tooltip.addEventListener('mouseleave', scheduleHideTooltip);
 
-            // Position tooltip
+            // Position tooltip to the right of the mouse cursor
             const rect = element.getBoundingClientRect();
-            tooltip.style.left = rect.left + 'px';
-            tooltip.style.top = (rect.bottom + 10) + 'px';
+            tooltip.style.left = (rect.right + 15) + 'px';
+            tooltip.style.top = rect.top + 'px';
         }
 
         function scheduleHideTooltip() {
@@ -2917,306 +2983,545 @@
             timeline: []
         };
 
-        function showInsightsTab(tabName) {
-            // Hide all tab contents
-            const contents = document.querySelectorAll('.insights-tab-content');
-            contents.forEach(content => content.classList.remove('active'));
+        // Curl-based URL Insights variables
+        let curlEventSource = null;
+        let curlOutputData = '';
+        let customHeadersCount = 0;
 
-            // Remove active class from all tabs
-            const tabs = document.querySelectorAll('.insights-tab');
-            tabs.forEach(tab => tab.classList.remove('active'));
+        function toggleCurlOptions() {
+            const panel = document.getElementById('curlOptionsPanel');
+            const icon = document.getElementById('curlOptionsToggleIcon');
 
-            // Show selected tab
-            document.getElementById(tabName + '-content').classList.add('active');
-            event.target.classList.add('active');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                icon.textContent = '▼';
+            } else {
+                panel.style.display = 'none';
+                icon.textContent = '▶';
+            }
         }
 
-        function analyzeURL() {
+        function addCustomHeader() {
+            customHeadersCount++;
+            const headersList = document.getElementById('customHeadersList');
+            const headerId = 'customHeader' + customHeadersCount;
+
+            const headerDiv = document.createElement('div');
+            headerDiv.id = headerId;
+            headerDiv.style.marginBottom = '5px';
+            headerDiv.style.display = 'flex';
+            headerDiv.style.gap = '5px';
+
+            headerDiv.innerHTML = `
+                <input type="text" placeholder="Header-Name" style="flex: 1; padding: 4px; font-size: 12px;" data-header-key="${headerId}">
+                <input type="text" placeholder="Value" style="flex: 1; padding: 4px; font-size: 12px;" data-header-value="${headerId}">
+                <button onclick="removeCustomHeader('${headerId}')" style="padding: 4px 8px; font-size: 12px;">×</button>
+            `;
+
+            headersList.appendChild(headerDiv);
+        }
+
+        function removeCustomHeader(headerId) {
+            const headerDiv = document.getElementById(headerId);
+            if (headerDiv) {
+                headerDiv.remove();
+            }
+        }
+
+        function getCustomHeaders() {
+            const headers = [];
+            const headersList = document.getElementById('customHeadersList');
+            const headerDivs = headersList.querySelectorAll('[id^="customHeader"]');
+
+            headerDivs.forEach(div => {
+                const keyInput = div.querySelector('[data-header-key]');
+                const valueInput = div.querySelector('[data-header-value]');
+
+                if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
+                    headers.push({
+                        key: keyInput.value.trim(),
+                        value: valueInput.value.trim()
+                    });
+                }
+            });
+
+            return headers;
+        }
+
+        function analyzeCurlURL() {
             const urlInput = document.getElementById('urlInsightsInput');
-            let url = urlInput.value.trim();
+            const url = urlInput.value.trim();
 
             if (!url) {
                 alert('Please enter a URL');
                 return;
             }
 
-            // Auto-add https:// if no protocol specified
-            if (!url.match(/^https?:\/\//i)) {
-                url = 'https://' + url;
-                urlInput.value = url;
+            // Close existing event source if any
+            if (curlEventSource) {
+                curlEventSource.close();
+                curlEventSource = null;
             }
 
-            // Validate URL
-            let urlObj;
-            try {
-                urlObj = new URL(url);
-            } catch (e) {
-                alert('Please enter a valid URL');
-                return;
-            }
+            // Reset output
+            curlOutputData = '';
+            document.getElementById('curlPlaceholder').style.display = 'none';
+            document.getElementById('curlOutput').style.display = 'block';
+            document.getElementById('curlOutput').textContent = '';
+            document.getElementById('curlStatus').textContent = 'Connecting...';
+            document.getElementById('curlStatus').style.color = '#007cba';
+            document.getElementById('exportCurlBtn').style.display = 'none';
 
-            // Reset data
-            urlInsightsData = {
-                requests: [],
-                startTime: Date.now(),
-                loadTime: null,
-                totalSize: 0,
-                statusCode: null,
-                tlsInfo: null,
-                timeline: [],
+            // Gather curl options
+            const curlOptions = {
                 url: url,
-                urlObj: urlObj
+                follow_redirects: document.getElementById('curlFollowRedirects').checked,
+                include_headers: document.getElementById('curlIncludeHeaders').checked,
+                headers_only: document.getElementById('curlHeadersOnly').checked,
+                verbose: document.getElementById('curlVerbose').checked,
+                user_agent: document.getElementById('curlUserAgent').value.trim(),
+                max_time: parseInt(document.getElementById('curlMaxTime').value) || 30,
+                request_method: document.getElementById('curlMethod').value,
+                custom_headers: getCustomHeaders()
             };
 
-            // Show URL info in left pane
-            document.getElementById('urlPreview').style.display = 'none';
-            document.getElementById('urlInfo').style.display = 'block';
-            document.getElementById('analyzed-url').textContent = url;
-            document.getElementById('analyzed-protocol').textContent = urlObj.protocol;
-            document.getElementById('analyzed-hostname').textContent = urlObj.hostname;
-            document.getElementById('analyzed-port').textContent = urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80');
-            document.getElementById('contentStatus').textContent = 'Analyzing...';
-            document.getElementById('exportInsightsBtn').style.display = 'inline-block';
-
-            // Add initial timeline entry
-            addTimelineEntry('Analysis started', 'info');
-
-            // Detect protocol
-            if (urlObj.protocol === 'https:') {
-                urlInsightsData.tlsInfo = {
-                    enabled: true,
-                    protocol: 'TLS/SSL',
-                    detected: true
-                };
-                addTimelineEntry('HTTPS detected - TLS encryption enabled', 'success');
-            } else {
-                urlInsightsData.tlsInfo = {
-                    enabled: false,
-                    protocol: 'HTTP',
-                    detected: false
-                };
-                addTimelineEntry('HTTP detected - No encryption', 'warning');
-            }
-            updateTLSDisplay();
-
-            // Make fetch request to analyze
-            addTimelineEntry('Initiating connection to: ' + url, 'info');
-
-            // Add error listener to catch network errors before they reach console
-            const startFetch = Date.now();
-
-            fetch(url, {
-                method: 'HEAD',
-                mode: 'no-cors'
-            })
-            .then(() => {
-                urlInsightsData.loadTime = Date.now() - urlInsightsData.startTime;
-                urlInsightsData.statusCode = 200;
-                addTimelineEntry('HEAD request completed (' + urlInsightsData.loadTime + 'ms)', 'success');
-                document.getElementById('contentStatus').textContent = 'Connection successful';
-
-                // Try to get more details with GET
-                return fetch(url, { method: 'GET', mode: 'no-cors' });
+            // Start curl request
+            fetch('/api/curl-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(curlOptions)
             })
             .then(response => {
-                const fullLoadTime = Date.now() - urlInsightsData.startTime;
-                addTimelineEntry('GET request completed (' + fullLoadTime + 'ms)', 'success');
-                urlInsightsData.loadTime = fullLoadTime;
-
-                // Add simulated request entry
-                urlInsightsData.requests.push({
-                    url: url,
-                    duration: fullLoadTime,
-                    size: 0,
-                    type: 'document'
-                });
-
-                updateRequestsDisplay();
-                updateOverviewStats();
-            })
-            .catch(error => {
-                urlInsightsData.statusCode = 'ERROR';
-                urlInsightsData.loadTime = Date.now() - urlInsightsData.startTime;
-
-                // Detect specific error types
-                let errorType = 'Connection Error';
-                let errorMessage = error.message || 'Unknown error';
-
-                if (error instanceof TypeError) {
-                    if (errorMessage.includes('Failed to fetch')) {
-                        errorType = 'DNS Resolution Failed / Network Error';
-                        addTimelineEntry('DNS lookup failed - hostname could not be resolved', 'error');
-                        addTimelineEntry('Possible causes: Invalid domain, DNS issues, or network connectivity problems', 'error');
-                        document.getElementById('contentStatus').textContent = 'DNS Error';
-                    } else if (errorMessage.includes('NetworkError')) {
-                        errorType = 'Network Error';
-                        addTimelineEntry('Network error occurred during connection', 'error');
-                        document.getElementById('contentStatus').textContent = 'Network Error';
-                    } else if (errorMessage.includes('CORS')) {
-                        errorType = 'CORS Policy Violation';
-                        addTimelineEntry('CORS policy blocked the request', 'warning');
-                        document.getElementById('contentStatus').textContent = 'CORS Blocked';
-                    } else {
-                        addTimelineEntry('Connection failed: ' + errorMessage, 'error');
-                        document.getElementById('contentStatus').textContent = 'Connection Failed';
-                    }
-                } else {
-                    addTimelineEntry('Error: ' + errorMessage, 'error');
-                    document.getElementById('contentStatus').textContent = 'Error';
+                if (!response.ok) {
+                    throw new Error('Request failed');
                 }
 
-                addTimelineEntry('Connection attempt duration: ' + urlInsightsData.loadTime + 'ms', 'info');
+                // Stream the response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
 
-                // Add failed request entry
-                urlInsightsData.requests.push({
-                    url: url,
-                    duration: urlInsightsData.loadTime,
-                    size: 0,
-                    type: 'failed',
-                    error: errorType
-                });
+                function readStream() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            document.getElementById('curlStatus').textContent = 'Completed';
+                            document.getElementById('curlStatus').style.color = '#28a745';
+                            document.getElementById('exportCurlBtn').style.display = 'inline-block';
+                            return;
+                        }
 
-                updateRequestsDisplay();
-                updateOverviewStats();
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.substring(6));
+                                    handleCurlEvent(data);
+                                } catch (e) {
+                                    // Ignore parse errors
+                                }
+                            }
+                        });
+
+                        readStream();
+                    }).catch(error => {
+                        document.getElementById('curlStatus').textContent = 'Error';
+                        document.getElementById('curlStatus').style.color = '#dc3545';
+                        appendCurlOutput('\n\nError: ' + error.message, '#dc3545');
+                    });
+                }
+
+                readStream();
+            })
+            .catch(error => {
+                document.getElementById('curlStatus').textContent = 'Error';
+                document.getElementById('curlStatus').style.color = '#dc3545';
+                appendCurlOutput('\n\nError: ' + error.message, '#dc3545');
             });
         }
 
-        function clearURLAnalysis() {
-            document.getElementById('urlInsightsInput').value = '';
-            document.getElementById('urlPreview').style.display = 'block';
-            document.getElementById('urlInfo').style.display = 'none';
-            document.getElementById('contentStatus').textContent = 'No URL loaded';
-            document.getElementById('exportInsightsBtn').style.display = 'none';
+        function handleCurlEvent(data) {
+            switch(data.type) {
+                case 'status':
+                    document.getElementById('curlStatus').textContent = data.message;
+                    document.getElementById('curlCommand').textContent = data.command || '';
+                    appendCurlOutput('$ ' + (data.command || '') + '\n\n', '#569cd6');
+                    break;
 
-            urlInsightsData = {
-                requests: [],
-                startTime: null,
-                loadTime: null,
-                totalSize: 0,
-                statusCode: null,
-                tlsInfo: null,
-                timeline: []
-            };
-            updateOverviewStats();
-            updateRequestsDisplay();
-            updateTLSDisplay();
-            updateTimelineDisplay();
+                case 'output':
+                    appendCurlOutput(data.line + '\n', '#d4d4d4');
+                    break;
+
+                case 'stderr':
+                    appendCurlOutput(data.line + '\n', '#ce9178');
+                    break;
+
+                case 'complete':
+                    document.getElementById('curlStatus').textContent = 'Completed';
+                    document.getElementById('curlStatus').style.color = '#28a745';
+                    document.getElementById('exportCurlBtn').style.display = 'inline-block';
+                    break;
+
+                case 'error':
+                    document.getElementById('curlStatus').textContent = 'Error';
+                    document.getElementById('curlStatus').style.color = '#dc3545';
+                    appendCurlOutput('\n\nError: ' + data.message + '\n', '#dc3545');
+                    break;
+            }
         }
 
-        function exportInsights() {
-            const dataStr = JSON.stringify(urlInsightsData, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
+        function appendCurlOutput(text, color) {
+            const outputDiv = document.getElementById('curlOutput');
+            curlOutputData += text;
+
+            // Apply syntax highlighting if no explicit color is set (default output)
+            if (color === '#d4d4d4' || color === '#ce9178') {
+                const highlightedHTML = highlightCurlOutput(text);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = highlightedHTML;
+                while (tempDiv.firstChild) {
+                    outputDiv.appendChild(tempDiv.firstChild);
+                }
+            } else {
+                // Use explicit color for commands and errors
+                const span = document.createElement('span');
+                span.style.color = color;
+                span.textContent = text;
+                outputDiv.appendChild(span);
+            }
+
+            // Auto-scroll to bottom
+            const container = document.getElementById('curlOutputContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function highlightCurlOutput(text) {
+            let highlighted = text;
+
+            // Escape HTML
+            highlighted = highlighted.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // DNS resolution (getaddrinfo, Trying IP addresses)
+            highlighted = highlighted.replace(
+                /(getaddrinfo\(3\)|Trying\s+[\d\.]+(?::\d+)?|Connected to\s+\S+\s+\([\d\.]+\)|Host\s+\S+:\d+\s+was resolved)/gi,
+                '<span style="color: #4ec9b0;">$1</span>'
+            );
+
+            // TLS/SSL Handshake and Certificate details
+            highlighted = highlighted.replace(
+                /(SSL connection using|TLSv[\d\.]+|TLS\s+handshake|SSL_connect|Server certificate|subject:|issuer:|start date:|expire date:|subjectAltName|ALPN|SSL certificate verify|CN=|O=|OU=)/gi,
+                '<span style="color: #c586c0; font-weight: bold;">$1</span>'
+            );
+
+            // Certificate/Cipher suite details
+            highlighted = highlighted.replace(
+                /(TLS_\w+|ECDHE-RSA-\w+|AES[\d]+-\w+|SHA\d+|RSA\s+\d+\s+bits?)/gi,
+                '<span style="color: #9cdcfe;">$1</span>'
+            );
+
+            // HTTP Response codes and status
+            highlighted = highlighted.replace(
+                /(HTTP\/[\d\.]+\s+)(\d{3})\s+(\w.*?)(<|$)/gi,
+                function(match, protocol, code, status, end) {
+                    let codeColor = '#4ec9b0'; // Default green
+                    const codeNum = parseInt(code);
+                    if (codeNum >= 200 && codeNum < 300) {
+                        codeColor = '#4ec9b0'; // Green for 2xx
+                    } else if (codeNum >= 300 && codeNum < 400) {
+                        codeColor = '#dcdcaa'; // Yellow for 3xx
+                    } else if (codeNum >= 400 && codeNum < 500) {
+                        codeColor = '#f48771'; // Orange for 4xx
+                    } else if (codeNum >= 500) {
+                        codeColor = '#f14c4c'; // Red for 5xx
+                    }
+                    return '<span style="color: #569cd6;">' + protocol + '</span>' +
+                           '<span style="color: ' + codeColor + '; font-weight: bold;">' + code + '</span> ' +
+                           '<span style="color: ' + codeColor + ';">' + status + '</span>' + end;
+                }
+            );
+
+            // HTTP Headers (key: value format)
+            highlighted = highlighted.replace(
+                /^([A-Z][A-Za-z0-9-]+):\s*(.*)$/gm,
+                '<span style="color: #9cdcfe;">$1:</span> <span style="color: #ce9178;">$2</span>'
+            );
+
+            // Stats section
+            highlighted = highlighted.replace(
+                /(--- Stats ---|HTTP Code:|Total Time:|Size:)/gi,
+                '<span style="color: #dcdcaa; font-weight: bold;">$1</span>'
+            );
+
+            // Numbers in stats
+            highlighted = highlighted.replace(
+                /(\d+\.\d+s|\d+ bytes)/gi,
+                '<span style="color: #b5cea8;">$1</span>'
+            );
+
+            // Asterisks and connection symbols
+            highlighted = highlighted.replace(
+                /(\*\s+)/g,
+                '<span style="color: #608b4e;">$1</span>'
+            );
+
+            return highlighted;
+        }
+
+        function clearCurlAnalysis() {
+            // Close event source if running
+            if (curlEventSource) {
+                curlEventSource.close();
+                curlEventSource = null;
+            }
+
+            document.getElementById('urlInsightsInput').value = '';
+            document.getElementById('curlPlaceholder').style.display = 'block';
+            document.getElementById('curlOutput').style.display = 'none';
+            document.getElementById('curlOutput').textContent = '';
+            document.getElementById('curlStatus').textContent = 'Ready';
+            document.getElementById('curlStatus').style.color = '#666';
+            document.getElementById('curlCommand').textContent = '';
+            document.getElementById('exportCurlBtn').style.display = 'none';
+            curlOutputData = '';
+        }
+
+        function exportCurlOutput() {
+            const blob = new Blob([curlOutputData], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'url-insights-' + Date.now() + '.json';
+            a.download = 'curl-output-' + Date.now() + '.txt';
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        function updateOverviewStats() {
-            document.getElementById('stat-total-requests').textContent = urlInsightsData.requests.length;
-            document.getElementById('stat-total-size').textContent = formatBytes(urlInsightsData.totalSize);
-            document.getElementById('stat-load-time').textContent = urlInsightsData.loadTime ? urlInsightsData.loadTime + ' ms' : '-';
-            document.getElementById('stat-status-code').textContent = urlInsightsData.statusCode || '-';
-        }
+        // TCP Handshake functions
+        let tcpOutputData = '';
 
-        function updateRequestsDisplay() {
-            const container = document.getElementById('requests-content');
-            if (urlInsightsData.requests.length === 0) {
-                container.innerHTML = '<em style="color: #666;">No requests captured yet...</em>';
+        function captureTCPHandshake() {
+            const target = document.getElementById('tcpHandshakeTarget').value.trim();
+            const port = parseInt(document.getElementById('tcpHandshakePort').value) || 80;
+
+            if (!target) {
+                alert('Please enter a target IP or domain');
                 return;
             }
 
-            let html = '<table style="width: 100%; font-size: 11px; border-collapse: collapse;">';
-            html += '<thead><tr style="background: #f8f9fa; border-bottom: 2px solid #ddd;">';
-            html += '<th style="padding: 6px; text-align: left;">URL</th>';
-            html += '<th style="padding: 6px; text-align: left;">Type</th>';
-            html += '<th style="padding: 6px; text-align: right;">Duration</th>';
-            html += '<th style="padding: 6px; text-align: right;">Size</th>';
-            html += '</tr></thead><tbody>';
+            // Reset output
+            tcpOutputData = '';
+            document.getElementById('tcpPlaceholder').style.display = 'none';
+            document.getElementById('tcpOutput').style.display = 'block';
+            document.getElementById('tcpOutput').innerHTML = '';
+            document.getElementById('tcpStatus').textContent = 'Starting capture...';
+            document.getElementById('tcpStatus').style.color = '#007cba';
+            document.getElementById('exportTCPBtn').style.display = 'none';
 
-            urlInsightsData.requests.forEach(req => {
-                const isError = req.type === 'failed';
-                const rowStyle = isError ? 'border-bottom: 1px solid #eee; background: #fff5f5;' : 'border-bottom: 1px solid #eee;';
-
-                html += '<tr style="' + rowStyle + '">';
-                html += '<td style="padding: 4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + req.url + '</td>';
-
-                if (isError) {
-                    html += '<td style="padding: 4px; color: #dc3545;"><strong>' + (req.error || 'Error') + '</strong></td>';
-                } else {
-                    html += '<td style="padding: 4px;">' + req.type + '</td>';
+            // Start TCP handshake capture
+            fetch('/api/tcp-handshake', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ target: target, port: port })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Request failed');
                 }
 
-                html += '<td style="padding: 4px; text-align: right;">' + Math.round(req.duration) + ' ms</td>';
-                html += '<td style="padding: 4px; text-align: right;">' + (isError ? 'N/A' : formatBytes(req.size)) + '</td>';
-                html += '</tr>';
-            });
+                // Stream the response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
 
-            html += '</tbody></table>';
-            container.innerHTML = html;
+                function readStream() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            return;
+                        }
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.substring(6));
+                                    handleTCPEvent(data);
+                                } catch (e) {
+                                    // Ignore parse errors
+                                }
+                            }
+                        });
+
+                        readStream();
+                    }).catch(error => {
+                        document.getElementById('tcpStatus').textContent = 'Error';
+                        document.getElementById('tcpStatus').style.color = '#dc3545';
+                        appendTCPOutput('\n\nError: ' + error.message, '#dc3545');
+                    });
+                }
+
+                readStream();
+            })
+            .catch(error => {
+                document.getElementById('tcpStatus').textContent = 'Error';
+                document.getElementById('tcpStatus').style.color = '#dc3545';
+                appendTCPOutput('\n\nError: ' + error.message, '#dc3545');
+            });
         }
 
-        function updateTLSDisplay() {
-            const container = document.getElementById('tls-content');
-            if (!urlInsightsData.tlsInfo) {
-                container.innerHTML = '<em style="color: #666;">No TLS information available...</em>';
-                return;
+        function handleTCPEvent(data) {
+            switch(data.type) {
+                case 'status':
+                    document.getElementById('tcpStatus').textContent = data.message;
+                    if (data.resolved_ip) {
+                        appendTCPOutput('🔍 Resolved: ' + data.resolved_ip + '\n\n', '#4ec9b0');
+                    }
+                    break;
+
+                case 'command':
+                    document.getElementById('tcpCommand').textContent = data.command || '';
+                    appendTCPOutput('$ ' + (data.command || '') + '\n\n', '#569cd6');
+                    break;
+
+                case 'packet':
+                    appendTCPOutput((data.packet_num ? '[' + data.packet_num + '] ' : '') + data.line + '\n', '#d4d4d4', true);
+                    break;
+
+                case 'info':
+                    if (data.lines && data.lines.length > 0) {
+                        appendTCPOutput('\n📊 Capture Info:\n', '#dcdcaa');
+                        data.lines.forEach(line => {
+                            appendTCPOutput(line + '\n', '#608b4e');
+                        });
+                    }
+                    break;
+
+                case 'warning':
+                    appendTCPOutput('\n⚠️  ' + data.message + '\n', '#ffc107');
+                    break;
+
+                case 'complete':
+                    document.getElementById('tcpStatus').textContent = data.message || 'Completed';
+                    document.getElementById('tcpStatus').style.color = '#28a745';
+                    document.getElementById('exportTCPBtn').style.display = 'inline-block';
+                    appendTCPOutput('\n✅ ' + data.message + '\n', '#4ec9b0');
+                    break;
+
+                case 'error':
+                    document.getElementById('tcpStatus').textContent = 'Error';
+                    document.getElementById('tcpStatus').style.color = '#dc3545';
+                    appendTCPOutput('\n\n❌ Error: ' + data.message + '\n', '#dc3545');
+                    break;
             }
+        }
 
-            let html = '<div style="font-size: 12px;">';
-            html += '<p><strong>Protocol:</strong> ' + urlInsightsData.tlsInfo.protocol + '</p>';
-            html += '<p><strong>Encryption:</strong> ' + (urlInsightsData.tlsInfo.enabled ?
-                '<span style="color: #28a745;">✓ Enabled</span>' :
-                '<span style="color: #dc3545;">✗ Disabled</span>') + '</p>';
+        function appendTCPOutput(text, color, highlightPacket) {
+            const outputDiv = document.getElementById('tcpOutput');
+            tcpOutputData += text;
 
-            if (urlInsightsData.tlsInfo.enabled) {
-                html += '<p style="margin-top: 10px;"><strong>Note:</strong> Browser security restrictions prevent detailed certificate inspection. The connection uses HTTPS with TLS encryption.</p>';
+            // Apply syntax highlighting for packets
+            if (highlightPacket) {
+                const highlightedHTML = highlightTCPPacket(text);
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = highlightedHTML;
+                while (tempDiv.firstChild) {
+                    outputDiv.appendChild(tempDiv.firstChild);
+                }
             } else {
-                html += '<p style="margin-top: 10px; color: #dc3545;"><strong>Warning:</strong> This connection is not encrypted. Data is transmitted in plain text.</p>';
+                const span = document.createElement('span');
+                span.style.color = color || '#d4d4d4';
+                span.textContent = text;
+                outputDiv.appendChild(span);
             }
 
-            html += '</div>';
-            container.innerHTML = html;
+            // Auto-scroll to bottom
+            const container = document.getElementById('tcpOutputContainer');
+            container.scrollTop = container.scrollHeight;
         }
 
-        function updateTimelineDisplay() {
-            const container = document.getElementById('timeline-content');
-            if (urlInsightsData.timeline.length === 0) {
-                container.innerHTML = '<em style="color: #666;">No timeline events yet...</em>';
-                return;
-            }
+        function highlightTCPPacket(text) {
+            let highlighted = text;
 
-            let html = '<div style="font-size: 11px;">';
-            urlInsightsData.timeline.forEach(event => {
-                let color = '#666';
-                if (event.type === 'success') color = '#28a745';
-                if (event.type === 'error') color = '#dc3545';
-                if (event.type === 'warning') color = '#ffc107';
+            // Escape HTML
+            highlighted = highlighted.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-                html += '<div style="padding: 4px 0; border-bottom: 1px solid #eee;">';
-                html += '<span style="color: ' + color + '; margin-right: 8px;">●</span>';
-                html += '<span style="color: #999; margin-right: 8px;">[' + event.timestamp + ']</span>';
-                html += '<span>' + event.message + '</span>';
-                html += '</div>';
-            });
-            html += '</div>';
-            container.innerHTML = html;
+            // Packet number [N]
+            highlighted = highlighted.replace(/^(\[\d+\])/gm, '<span style="color: #608b4e;">$1</span>');
+
+            // Timestamp
+            highlighted = highlighted.replace(/(\d{2}:\d{2}:\d{2}\.\d+)/g, '<span style="color: #9cdcfe;">$1</span>');
+
+            // IP addresses
+            highlighted = highlighted.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span style="color: #4ec9b0; font-weight: bold;">$1</span>');
+
+            // TCP Flags - SYN (green/cyan)
+            highlighted = highlighted.replace(/(\bFlags\s+\[)([^\]]*SYN[^\]]*)(\])/gi,
+                '<span style="color: #dcdcaa;">$1</span><span style="color: #4ec9b0; font-weight: bold;">$2</span><span style="color: #dcdcaa;">$3</span>');
+
+            // TCP Flags - SYN-ACK (yellow)
+            highlighted = highlighted.replace(/(\bFlags\s+\[)([^\]]*S\.[^\]]*)(\])/gi,
+                '<span style="color: #dcdcaa;">$1</span><span style="color: #dcdcaa; font-weight: bold;">$2</span><span style="color: #dcdcaa;">$3</span>');
+
+            // TCP Flags - ACK (blue)
+            highlighted = highlighted.replace(/(\bFlags\s+\[)([^\]]*ACK[^\]]*)(\])/gi,
+                '<span style="color: #dcdcaa;">$1</span><span style="color: #569cd6; font-weight: bold;">$2</span><span style="color: #dcdcaa;">$3</span>');
+
+            // TCP Flags - other
+            highlighted = highlighted.replace(/(\bFlags\s+\[)([^\]]+)(\])/gi,
+                '<span style="color: #dcdcaa;">$1</span><span style="color: #c586c0;">$2</span><span style="color: #dcdcaa;">$3</span>');
+
+            // Port numbers
+            highlighted = highlighted.replace(/\.(\d{1,5}):/g, '.<span style="color: #b5cea8;">$1</span>:');
+
+            // Sequence numbers
+            highlighted = highlighted.replace(/(seq\s+)(\d+)(:\d+)?/gi,
+                '<span style="color: #9cdcfe;">$1</span><span style="color: #b5cea8;">$2$3</span>');
+
+            // Acknowledgment numbers
+            highlighted = highlighted.replace(/(ack\s+)(\d+)/gi,
+                '<span style="color: #9cdcfe;">$1</span><span style="color: #b5cea8;">$2</span>');
+
+            // Window size
+            highlighted = highlighted.replace(/(win\s+)(\d+)/gi,
+                '<span style="color: #9cdcfe;">$1</span><span style="color: #b5cea8;">$2</span>');
+
+            // Length
+            highlighted = highlighted.replace(/(length\s+)(\d+)/gi,
+                '<span style="color: #9cdcfe;">$1</span><span style="color: #b5cea8;">$2</span>');
+
+            // Protocol keywords
+            highlighted = highlighted.replace(/\b(tcp|TCP|IP)\b/g, '<span style="color: #c586c0; font-weight: bold;">$1</span>');
+
+            // Direction arrows
+            highlighted = highlighted.replace(/(&gt;)/g, '<span style="color: #f48771;">$1</span>');
+
+            return highlighted;
         }
 
-        function addTimelineEntry(message, type) {
-            const timestamp = new Date().toLocaleTimeString();
-            urlInsightsData.timeline.push({ timestamp, message, type });
-            updateTimelineDisplay();
+        function clearTCPHandshake() {
+            document.getElementById('tcpHandshakeTarget').value = '';
+            document.getElementById('tcpHandshakePort').value = '80';
+            document.getElementById('tcpPlaceholder').style.display = 'block';
+            document.getElementById('tcpOutput').style.display = 'none';
+            document.getElementById('tcpOutput').innerHTML = '';
+            document.getElementById('tcpStatus').textContent = 'Ready';
+            document.getElementById('tcpStatus').style.color = '#666';
+            document.getElementById('tcpCommand').textContent = '';
+            document.getElementById('exportTCPBtn').style.display = 'none';
+            tcpOutputData = '';
         }
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        function exportTCPOutput() {
+            const blob = new Blob([tcpOutputData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tcp-handshake-' + Date.now() + '.txt';
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // Initialize insights tab on page load

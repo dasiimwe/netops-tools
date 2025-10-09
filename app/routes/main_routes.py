@@ -29,6 +29,7 @@ def index():
         'dns_lookup': Settings.get_value('tool_dns_lookup', True),
         'traceroute': Settings.get_value('tool_traceroute', True),
         'url_insights': Settings.get_value('tool_url_insights', True),
+        'tcp_handshake': Settings.get_value('tool_tcp_handshake', True),
         'whoami': Settings.get_value('tool_whoami', True)
     }
 
@@ -1346,3 +1347,264 @@ def traceroute():
             'success': False,
             'error': str(e)
         })
+
+@main_bp.route('/api/curl-url', methods=['POST'])
+def curl_url():
+    """Execute curl command server-side and stream output via SSE"""
+    import re
+    from urllib.parse import urlparse
+
+    data = request.get_json()
+    url = data.get('url', '').strip()
+
+    # Curl options
+    follow_redirects = data.get('follow_redirects', False)
+    include_headers = data.get('include_headers', False)
+    headers_only = data.get('headers_only', False)
+    verbose = data.get('verbose', False)
+    user_agent = data.get('user_agent', '').strip()
+    max_time = data.get('max_time', 30)
+    request_method = data.get('request_method', 'GET').upper()
+    custom_headers = data.get('custom_headers', [])
+
+    # Validate URL
+    if not url:
+        return jsonify({'success': False, 'error': 'URL is required'})
+
+    # Add http:// if no protocol specified
+    if not url.startswith(('http://', 'https://')):
+        url = 'http://' + url
+
+    # Validate URL format
+    try:
+        parsed = urlparse(url)
+        if not parsed.netloc:
+            return jsonify({'success': False, 'error': 'Invalid URL format'})
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid URL format'})
+
+    # Build curl command
+    curl_cmd = ['curl', '-s', '-w', '\\n--- Stats ---\\nHTTP Code: %{http_code}\\nTotal Time: %{time_total}s\\nSize: %{size_download} bytes\\n']
+
+    if follow_redirects:
+        curl_cmd.append('-L')
+
+    if headers_only:
+        curl_cmd.append('-I')
+    elif include_headers:
+        curl_cmd.append('-i')
+
+    if verbose:
+        curl_cmd.append('-v')
+
+    if user_agent:
+        curl_cmd.extend(['-A', user_agent])
+
+    if max_time:
+        curl_cmd.extend(['--max-time', str(max_time)])
+
+    if request_method and request_method != 'GET' and not headers_only:
+        curl_cmd.extend(['-X', request_method])
+
+    # Add custom headers
+    for header in custom_headers:
+        if header.get('key') and header.get('value'):
+            curl_cmd.extend(['-H', f"{header['key']}: {header['value']}"])
+
+    curl_cmd.append(url)
+
+    def generate():
+        """Generator function to stream curl output"""
+        try:
+            import json
+
+            # Send initial status
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Executing curl request...', 'command': ' '.join(curl_cmd)})}\n\n"
+
+            # Execute curl command
+            process = subprocess.Popen(
+                curl_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+
+            # Stream stdout
+            for line in process.stdout:
+                yield f"data: {json.dumps({'type': 'output', 'line': line.rstrip()})}\n\n"
+
+            # Get stderr (for verbose mode)
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                for line in stderr_output.split('\n'):
+                    if line.strip():
+                        yield f"data: {json.dumps({'type': 'stderr', 'line': line.rstrip()})}\n\n"
+
+            # Wait for process to complete
+            return_code = process.wait()
+
+            if return_code == 0:
+                yield f"data: {json.dumps({'type': 'complete', 'message': 'Request completed successfully'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Curl exited with code {return_code}'})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
+@main_bp.route('/api/tcp-handshake', methods=['POST'])
+def tcp_handshake():
+    """Capture and display TCP handshake packets using tcpdump"""
+    import socket
+    import re
+    from urllib.parse import urlparse
+
+    data = request.get_json()
+    target = data.get('target', '').strip()
+    port = data.get('port', 80)
+
+    # Validate target
+    if not target:
+        return jsonify({'success': False, 'error': 'Target IP or domain is required'})
+
+    # Validate port
+    try:
+        port = int(port)
+        if port < 1 or port > 65535:
+            return jsonify({'success': False, 'error': 'Port must be between 1 and 65535'})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'Invalid port number'})
+
+    # Resolve domain to IP if needed
+    target_ip = target
+    if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', target):
+        try:
+            target_ip = socket.gethostbyname(target)
+        except socket.gaierror:
+            return jsonify({'success': False, 'error': f'Could not resolve hostname: {target}'})
+
+    def generate():
+        """Generator function to stream TCP handshake capture"""
+        try:
+            import json
+            import time
+            import signal
+
+            # Send initial status
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Resolving {target}...', 'resolved_ip': target_ip})}\n\n"
+
+            # Use tcpdump to capture TCP handshake (SYN, SYN-ACK, ACK)
+            # -i any: capture on any interface
+            # -n: don't resolve hostnames
+            # -S: print absolute sequence numbers
+            # -c 10: capture up to 10 packets (handshake + extras)
+            # tcp[tcpflags] & (tcp-syn|tcp-ack) != 0: capture SYN and ACK packets
+            tcpdump_cmd = [
+                'tcpdump',
+                '-i', 'any',
+                '-n',
+                '-S',
+                '-c', '10',
+                f'host {target_ip} and port {port} and tcp'
+            ]
+
+            yield f"data: {json.dumps({'type': 'command', 'command': ' '.join(tcpdump_cmd)})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Starting packet capture for {target_ip}:{port}...'})}\n\n"
+
+            # Start tcpdump in background
+            tcpdump_process = subprocess.Popen(
+                tcpdump_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
+            )
+
+            # Give tcpdump time to start
+            time.sleep(0.5)
+
+            # Initiate TCP connection to trigger handshake
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Initiating TCP connection to {target_ip}:{port}...'})}\n\n"
+
+            connection_thread_error = None
+            def connect_to_target():
+                nonlocal connection_thread_error
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(5)
+                    sock.connect((target_ip, port))
+                    time.sleep(0.2)
+                    sock.close()
+                except Exception as e:
+                    connection_thread_error = str(e)
+
+            # Run connection in thread to not block tcpdump reading
+            from threading import Thread
+            connect_thread = Thread(target=connect_to_target)
+            connect_thread.start()
+
+            # Read tcpdump output
+            packet_count = 0
+            start_time = time.time()
+            stderr_lines = []
+
+            # Read stderr first (tcpdump info)
+            while time.time() - start_time < 0.5:
+                line = tcpdump_process.stderr.readline()
+                if line:
+                    stderr_lines.append(line.strip())
+
+            # Read stdout (packet capture)
+            for line in tcpdump_process.stdout:
+                if line.strip():
+                    packet_count += 1
+                    yield f"data: {json.dumps({'type': 'packet', 'line': line.rstrip(), 'packet_num': packet_count})}\n\n"
+
+                # Stop after reasonable number of packets or timeout
+                if packet_count >= 10 or time.time() - start_time > 10:
+                    break
+
+            # Wait for connection thread
+            connect_thread.join(timeout=2)
+
+            # Terminate tcpdump
+            tcpdump_process.terminate()
+            tcpdump_process.wait(timeout=2)
+
+            # Send tcpdump info
+            if stderr_lines:
+                yield f"data: {json.dumps({'type': 'info', 'lines': stderr_lines})}\n\n"
+
+            if connection_thread_error:
+                yield f"data: {json.dumps({'type': 'warning', 'message': f'Connection note: {connection_thread_error}'})}\n\n"
+
+            if packet_count > 0:
+                yield f"data: {json.dumps({'type': 'complete', 'message': f'Captured {packet_count} packets', 'packet_count': packet_count})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No packets captured. Make sure you have sufficient permissions (may require sudo/root).'})}\n\n"
+
+        except PermissionError:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Permission denied. TCP packet capture requires elevated privileges (sudo/root).'})}\n\n"
+        except FileNotFoundError:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'tcpdump not found. Please install tcpdump: brew install tcpdump (macOS) or apt-get install tcpdump (Linux)'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Error: {str(e)}'})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )

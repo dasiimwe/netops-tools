@@ -203,6 +203,24 @@
                     </div>
                 </div>
 
+                <!-- Device Filter -->
+                <div class="col-md-2">
+                    <label for="device_filter" class="form-label">Device</label>
+                    <input type="text"
+                           class="form-control"
+                           id="device_filter"
+                           name="device_filter"
+                           value="{{ device_filter }}"
+                           placeholder="Type device name..."
+                           list="devicesList"
+                           autocomplete="off">
+                    <datalist id="devicesList">
+                        {% for device in all_devices %}
+                        <option value="{{ device.hostname }}">{{ device.ip_address }}</option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+
                 <!-- Vendor Filter -->
                 <div class="col-md-2">
                     <label for="vendor" class="form-label">Vendor</label>
@@ -271,7 +289,7 @@
     <div>
         <small class="text-muted">
             Showing {{ pagination.items|length }} of {{ pagination.total }} devices
-            {% if search or vendor_filter or status_filter or group_filter %}
+            {% if search or device_filter or vendor_filter or status_filter or group_filter %}
             (filtered)
             {% endif %}
         </small>
@@ -368,7 +386,7 @@
             <tr>
                 <td colspan="8" class="text-center text-muted py-4">
                     <i class="bi bi-router h1 d-block text-muted mb-2"></i>
-                    {% if search or vendor_filter or status_filter or group_filter %}
+                    {% if search or device_filter or vendor_filter or status_filter or group_filter %}
                     No devices found matching your filters.
                     <br><small>Try adjusting your search criteria or clearing filters.</small>
                     {% else %}
@@ -390,12 +408,12 @@
         <!-- First page -->
         {% if pagination.has_prev %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('devices.list_devices', page=1, search=search, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
+            <a class="page-link" href="{{ url_for('devices.list_devices', page=1, search=search, device_filter=device_filter, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
                 <i class="bi bi-chevron-double-left"></i>
             </a>
         </li>
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.prev_num, search=search, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
+            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.prev_num, search=search, device_filter=device_filter, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -413,7 +431,7 @@
         {% if page_num %}
         {% if page_num != pagination.page %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('devices.list_devices', page=page_num, search=search, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
+            <a class="page-link" href="{{ url_for('devices.list_devices', page=page_num, search=search, device_filter=device_filter, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
                 {{ page_num }}
             </a>
         </li>
@@ -432,12 +450,12 @@
         <!-- Last page -->
         {% if pagination.has_next %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.next_num, search=search, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
+            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.next_num, search=search, device_filter=device_filter, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.pages, search=search, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
+            <a class="page-link" href="{{ url_for('devices.list_devices', page=pagination.pages, search=search, device_filter=device_filter, sort_by=sort_by, sort_order=sort_order, vendor=vendor_filter, status=status_filter, group=group_filter, per_page=per_page) }}">
                 <i class="bi bi-chevron-double-right"></i>
             </a>
         </li>
@@ -675,6 +693,39 @@ function submitForm() {
 function clearFilters() {
     window.location.href = '{{ url_for("devices.list_devices") }}';
 }
+
+// Handle device filter input with autocomplete
+document.addEventListener('DOMContentLoaded', function() {
+    const deviceFilterInput = document.getElementById('device_filter');
+    if (deviceFilterInput) {
+        // Submit form when user selects from datalist or presses enter
+        deviceFilterInput.addEventListener('input', function() {
+            // Check if the value matches one from the datalist
+            const datalist = document.getElementById('devicesList');
+            const options = datalist.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === this.value) {
+                    submitForm();
+                    break;
+                }
+            }
+        });
+
+        deviceFilterInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitForm();
+            }
+        });
+
+        // Clear filter when input is cleared
+        deviceFilterInput.addEventListener('change', function() {
+            if (this.value === '') {
+                submitForm();
+            }
+        });
+    }
+});
 
 // Handle sortable column clicks
 document.addEventListener('DOMContentLoaded', function() {

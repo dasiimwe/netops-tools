@@ -340,6 +340,17 @@
 
                     <div class="col-md-6 mb-3">
                         <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_tcp_handshake" name="tool_tcp_handshake"
+                                   {% if settings.tool_tcp_handshake is not defined or settings.tool_tcp_handshake %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_tcp_handshake">
+                                <strong>TCP Handshake</strong>
+                            </label>
+                            <div class="form-text">View TCP 3-way handshake packets</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="tool_whoami" name="tool_whoami"
                                    {% if settings.tool_whoami is not defined or settings.tool_whoami %}checked{% endif %}>
                             <label class="form-check-label" for="tool_whoami">

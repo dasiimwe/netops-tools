@@ -117,6 +117,7 @@ def list_devices():
     vendor_filter = request.args.get('vendor', '')
     status_filter = request.args.get('status', '')
     group_filter = request.args.get('group', '', type=int)
+    device_filter = request.args.get('device_filter', '').strip()
 
     # Validate per_page limits
     if per_page not in [5, 10, 25, 50, 100]:
@@ -133,6 +134,10 @@ def list_devices():
 
     # Start building the query
     query = Device.query
+
+    # Apply device filter (specific device search)
+    if device_filter:
+        query = query.filter(Device.hostname.ilike(f'%{device_filter}%'))
 
     # Apply search filter
     if search:
@@ -194,6 +199,9 @@ def list_devices():
     vendors = db.session.query(Device.vendor).distinct().order_by(Device.vendor).all()
     vendors = [v[0] for v in vendors if v[0]]
 
+    # Get all devices for device filter autocomplete
+    all_devices = Device.query.order_by(Device.hostname).all()
+
     # Get device statistics
     total_devices = Device.query.count()
     reachable_devices = Device.query.filter_by(is_reachable=True).count()
@@ -206,12 +214,14 @@ def list_devices():
                          available_credentials=available_credentials,
                          available_pools=available_pools,
                          vendors=vendors,
+                         all_devices=all_devices,
                          search=search,
                          sort_by=sort_by,
                          sort_order=sort_order,
                          vendor_filter=vendor_filter,
                          status_filter=status_filter,
                          group_filter=group_filter,
+                         device_filter=device_filter,
                          per_page=per_page,
                          total_devices=total_devices,
                          reachable_devices=reachable_devices,

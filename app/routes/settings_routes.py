@@ -43,6 +43,7 @@ def index():
         'tool_dns_lookup': Settings.get_value('tool_dns_lookup', True),
         'tool_traceroute': Settings.get_value('tool_traceroute', True),
         'tool_url_insights': Settings.get_value('tool_url_insights', True),
+        'tool_tcp_handshake': Settings.get_value('tool_tcp_handshake', True),
         'tool_whoami': Settings.get_value('tool_whoami', True)
     }
 
@@ -189,6 +190,11 @@ def update():
                           request.form.get('tool_url_insights') == 'on',
                           'bool',
                           'Show URL/App Insights tool on home page')
+
+        Settings.set_value('tool_tcp_handshake',
+                          request.form.get('tool_tcp_handshake') == 'on',
+                          'bool',
+                          'Show TCP Handshake tool on home page')
 
         Settings.set_value('tool_whoami',
                           request.form.get('tool_whoami') == 'on',
