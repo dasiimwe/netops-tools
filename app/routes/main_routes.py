@@ -2146,9 +2146,13 @@ def bgp_looking_glass_lookup():
                 # Build commands based on device type
                 commands_to_run = []
 
+                # Strip CIDR notation from prefix for certain commands
+                prefix_without_cidr = prefix.split('/')[0] if '/' in prefix else prefix
+
                 if show_ip_route:
                     if device.vendor in ['cisco_ios', 'cisco_nxos', 'cisco_iosxr']:
-                        commands_to_run.append(f'show ip route {prefix}')
+                        # Cisco route commands need prefix without CIDR notation
+                        commands_to_run.append(f'show ip route {prefix_without_cidr}')
                     elif device.vendor in ['paloalto', 'paloalto_panos']:
                         commands_to_run.append(f'show routing route destination {prefix}')
                     elif device.vendor in ['fortigate', 'fortinet']:
