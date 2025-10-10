@@ -289,17 +289,20 @@
         {% if tool_visibility.dns_lookup %}
         <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner %} active{% endif %}" onclick="showTab('dns-lookup')">DNS Lookup</div>
         {% endif %}
+        {% if tool_visibility.bgp_looking_glass %}
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}" onclick="showTab('bgp-looking-glass')">BGP Looking Glass</div>
+        {% endif %}
         {% if tool_visibility.traceroute %}
-        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}" onclick="showTab('traceroute')">Traceroute</div>
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass %} active{% endif %}" onclick="showTab('traceroute')">Traceroute</div>
         {% endif %}
         {% if tool_visibility.url_insights %}
-        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}" onclick="showTab('url-insights')">URL/App Insights</div>
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute %} active{% endif %}" onclick="showTab('url-insights')">URL/App Insights</div>
         {% endif %}
         {% if tool_visibility.tcp_handshake %}
-        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}" onclick="showTab('tcp-handshake')">TCP Handshake</div>
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}" onclick="showTab('tcp-handshake')">TCP Handshake</div>
         {% endif %}
         {% if tool_visibility.whoami %}
-        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}" onclick="showTab('whoami')">WhoAmI</div>
+        <div class="tab{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}" onclick="showTab('whoami')">WhoAmI</div>
         {% endif %}
     </div>
 
@@ -506,9 +509,74 @@
     </div>
     {% endif %}
 
+    <!-- BGP Looking Glass Tab -->
+    {% if tool_visibility.bgp_looking_glass %}
+    <div id="bgp-looking-glass" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}">
+        <p>BGP Looking Glass Tool</p>
+
+        <div>
+            <!-- Credentials Section -->
+            <div style="margin-bottom: 20px;">
+                <label><strong>Credentials:</strong></label><br>
+                <input type="text" id="bgpUsername" placeholder="Username" style="margin: 5px; padding: 5px; width: 200px;">
+                <input type="password" id="bgpPassword" placeholder="Password" style="margin: 5px; padding: 5px; width: 200px;">
+            </div>
+
+            <!-- Prefix Input -->
+            <div style="margin-bottom: 20px;">
+                <label><strong>Prefix:</strong></label><br>
+                <input type="text" id="bgpPrefix" placeholder="e.g., 10.0.0.0/24 or 192.168.1.0/24" style="margin: 5px; padding: 5px; width: 400px;">
+            </div>
+
+            <!-- Query Options -->
+            <div style="margin-bottom: 20px;">
+                <label><strong>Query Options:</strong></label><br>
+                <div style="margin: 5px;">
+                    <input type="checkbox" id="optShowIpRoute" checked>
+                    <label for="optShowIpRoute">show ip route</label>
+                </div>
+                <div style="margin: 5px;">
+                    <input type="checkbox" id="optShowIpBgp" checked>
+                    <label for="optShowIpBgp">show ip bgp</label>
+                </div>
+            </div>
+
+            <!-- Device Selection -->
+            <div style="margin-bottom: 20px;">
+                <label><strong>Looking Glass Devices:</strong></label><br>
+                <select id="bgpDevices" multiple size="10" style="margin: 5px; padding: 5px; width: 400px; font-family: monospace;">
+                    <option value="">Loading devices...</option>
+                </select>
+                <div style="font-size: 12px; color: #666; margin-left: 5px;">
+                    Hold Ctrl (Cmd on Mac) to select multiple devices
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="margin-bottom: 20px;">
+                <button onclick="runBgpLookup()" style="padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; border-radius: 4px;">
+                    Run BGP Lookup
+                </button>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="bgpProgress" style="display: none; margin-top: 20px; padding: 10px; background: #f0f0f0; border: 1px solid #ccc;"></div>
+
+            <!-- Results Section -->
+            <div style="margin-top: 20px;">
+                <label><strong>Results:</strong></label>
+                <br>
+                <div id="bgpResults" style="border: 1px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.2; background: white; margin-top: 10px; white-space: pre-wrap;">
+                    <em>BGP lookup results will appear here...</em>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Traceroute Tab -->
     {% if tool_visibility.traceroute %}
-    <div id="traceroute" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup %} active{% endif %}">
+    <div id="traceroute" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass %} active{% endif %}">
         <p>Parallel Traceroute Tool</p>
 
         <div>
@@ -588,7 +656,7 @@
 
     <!-- URL/App Insights Tab -->
     {% if tool_visibility.url_insights %}
-    <div id="url-insights" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute %} active{% endif %}">
+    <div id="url-insights" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute %} active{% endif %}">
         <p>URL Insights - Server-side Curl Diagnostics</p>
 
         <div style="margin-bottom: 20px;">
@@ -713,7 +781,7 @@
 
     <!-- TCP Handshake Tab -->
     {% if tool_visibility.tcp_handshake %}
-    <div id="tcp-handshake" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}">
+    <div id="tcp-handshake" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute and not tool_visibility.url_insights %} active{% endif %}">
         <p>TCP 3-Way Handshake Analyzer</p>
 
         <div style="margin-bottom: 20px;">
@@ -764,7 +832,7 @@
 
     <!-- WhoAmI Tab -->
     {% if tool_visibility.whoami %}
-    <div id="whoami" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}">
+    <div id="whoami" class="tab-content{% if not tool_visibility.ip_translator and not tool_visibility.command_runner and not tool_visibility.dns_lookup and not tool_visibility.bgp_looking_glass and not tool_visibility.traceroute and not tool_visibility.url_insights and not tool_visibility.tcp_handshake %} active{% endif %}">
         <p></p>
 
         <div style="max-width: 50%; margin: 0 auto;">
@@ -4557,6 +4625,221 @@
             }
 
             return false;
+        }
+
+        // ==================== BGP Looking Glass Functions ====================
+
+        // Load BGP Looking Glass devices when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBgpDevices();
+        });
+
+        async function loadBgpDevices() {
+            // Check if BGP devices select element exists (only on BGP Looking Glass tool)
+            const select = document.getElementById('bgpDevices');
+            if (!select) {
+                return; // Element doesn't exist, skip loading
+            }
+
+            try {
+                const response = await fetch('/api/bgp-looking-glass/devices');
+                if (response.ok) {
+                    const devices = await response.json();
+                    select.innerHTML = '';
+
+                    if (devices.length === 0) {
+                        select.innerHTML = '<option value="">No devices configured. Please configure in Settings.</option>';
+                    } else {
+                        devices.forEach(device => {
+                            const option = document.createElement('option');
+                            option.value = device.id;
+                            option.textContent = `${device.hostname} (${device.ip_address})`;
+                            select.appendChild(option);
+                        });
+                    }
+                } else {
+                    console.error('Error loading BGP devices');
+                    select.innerHTML = '<option value="">Error loading devices</option>';
+                }
+            } catch (error) {
+                console.error('Error loading BGP devices:', error);
+                select.innerHTML = '<option value="">Error loading devices</option>';
+            }
+        }
+
+        async function runBgpLookup() {
+            const username = document.getElementById('bgpUsername').value.trim();
+            const password = document.getElementById('bgpPassword').value.trim();
+            const prefix = document.getElementById('bgpPrefix').value.trim();
+            const showIpRoute = document.getElementById('optShowIpRoute').checked;
+            const showIpBgp = document.getElementById('optShowIpBgp').checked;
+
+            const deviceSelect = document.getElementById('bgpDevices');
+            const selectedDevices = Array.from(deviceSelect.selectedOptions).map(opt => opt.value);
+
+            // Validation
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+
+            if (!prefix) {
+                alert('Please enter a prefix');
+                return;
+            }
+
+            if (!showIpRoute && !showIpBgp) {
+                alert('Please select at least one query option');
+                return;
+            }
+
+            if (selectedDevices.length === 0) {
+                alert('Please select at least one device');
+                return;
+            }
+
+            const progressDiv = document.getElementById('bgpProgress');
+            const resultsDiv = document.getElementById('bgpResults');
+
+            progressDiv.style.display = 'block';
+            progressDiv.innerHTML = '<div>Starting BGP lookup...</div>';
+            resultsDiv.textContent = '';
+
+            // Build URL with query parameters for POST with EventSource compatibility
+            const formData = new URLSearchParams({
+                username: username,
+                password: password,
+                prefix: prefix,
+                show_ip_route: showIpRoute,
+                show_ip_bgp: showIpBgp,
+                device_ids: JSON.stringify(selectedDevices)
+            });
+
+            try {
+                const response = await fetch('/api/bgp-looking-glass/lookup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        prefix: prefix,
+                        show_ip_route: showIpRoute,
+                        show_ip_bgp: showIpBgp,
+                        device_ids: selectedDevices
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    alert('Error: ' + (errorData.error || 'Unknown error'));
+                    progressDiv.style.display = 'none';
+                    return;
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.substring(6);
+                            try {
+                                const event = JSON.parse(jsonStr);
+                                handleBgpStreamEvent(event, progressDiv, resultsDiv);
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e, jsonStr);
+                            }
+                        }
+                    }
+                }
+
+                progressDiv.innerHTML = '<div style="color: green;">✓ BGP lookup completed!</div>';
+                setTimeout(() => {
+                    progressDiv.style.display = 'none';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error running BGP lookup:', error);
+                alert('Error running BGP lookup: ' + error.message);
+                progressDiv.style.display = 'none';
+            }
+        }
+
+        function handleBgpStreamEvent(event, progressDiv, resultsDiv) {
+            const { type, hostname, command, output, message } = event;
+
+            switch (type) {
+                case 'device_start':
+                    resultsDiv.textContent += '=' + '='.repeat(79) + '\n';
+                    resultsDiv.textContent += `Device: ${hostname}\n`;
+                    resultsDiv.textContent += '=' + '='.repeat(79) + '\n\n';
+                    progressDiv.innerHTML = `<div>Processing device: ${hostname}...</div>`;
+                    break;
+
+                case 'status':
+                    progressDiv.innerHTML = `<div>${hostname}: ${message}</div>`;
+                    break;
+
+                case 'command':
+                    resultsDiv.textContent += `----- ${command} -----\n`;
+                    progressDiv.innerHTML = `<div>${hostname}: Executing command...</div>`;
+                    break;
+
+                case 'output':
+                    resultsDiv.textContent += output || '(no output)';
+                    resultsDiv.textContent += '\n\n';
+                    // Auto-scroll to bottom
+                    resultsDiv.scrollTop = resultsDiv.scrollHeight;
+                    break;
+
+                case 'error':
+                    resultsDiv.textContent += `ERROR: ${message}\n\n`;
+                    resultsDiv.scrollTop = resultsDiv.scrollHeight;
+                    break;
+
+                case 'device_complete':
+                    resultsDiv.textContent += '\n';
+                    break;
+
+                case 'complete':
+                    progressDiv.innerHTML = '<div style="color: green;">✓ All devices processed!</div>';
+                    break;
+            }
+        }
+
+        function displayBgpResults(data) {
+            const resultsDiv = document.getElementById('bgpResults');
+            let output = '';
+
+            for (const [deviceName, deviceData] of Object.entries(data.results)) {
+                output += '=' + '='.repeat(79) + '\n';
+                output += `Device: ${deviceName}\n`;
+                output += '=' + '='.repeat(79) + '\n\n';
+
+                if (deviceData.status === 'success') {
+                    for (const [command, commandData] of Object.entries(deviceData.commands)) {
+                        output += `----- ${command} -----\n`;
+                        output += commandData.output || '(no output)';
+                        output += '\n\n';
+                    }
+                } else {
+                    output += `ERROR: ${deviceData.error}\n\n`;
+                }
+            }
+
+            resultsDiv.textContent = output;
         }
     </script>
 </body>

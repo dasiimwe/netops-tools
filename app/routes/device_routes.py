@@ -1518,8 +1518,6 @@ def export_json():
             'hostname': device.hostname,
             'ip_address': device.ip_address,
             'vendor': device.vendor,
-            'device_type': device.device_type,
-            'location': device.location,
             'is_reachable': device.is_reachable,
             'interfaces': interfaces,
             'updated_at': device.updated_at.isoformat() if device.updated_at else None,
@@ -1595,3 +1593,35 @@ def bulk_edit_vendor():
     except Exception as e:
         logger.error(f"Bulk vendor update error: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@device_bp.route('/api/list', methods=['GET'])
+@login_required
+def api_list_devices():
+    """API endpoint to get all devices for dropdowns and selections"""
+    try:
+        logger.info("API list devices endpoint called")
+
+        # Query all devices
+        devices = Device.query.order_by(Device.hostname).all()
+        logger.info(f"Found {len(devices)} devices")
+
+        # Build response list
+        device_list = []
+        for device in devices:
+            try:
+                device_list.append({
+                    'id': device.id,
+                    'hostname': device.hostname or '',
+                    'ip_address': device.ip_address or '',
+                    'vendor': device.vendor or ''
+                })
+            except Exception as device_error:
+                logger.error(f"Error processing device {device.id}: {str(device_error)}")
+                continue
+
+        logger.info(f"Returning {len(device_list)} devices")
+        return jsonify(device_list), 200
+
+    except Exception as e:
+        logger.error(f"Error in api_list_devices: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500

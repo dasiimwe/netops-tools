@@ -404,3 +404,18 @@ class SavedCommand(db.Model):
 
     def __repr__(self):
         return f'<SavedCommand {self.name}>'
+
+class BgpLookingGlassDevice(db.Model):
+    __tablename__ = 'bgp_looking_glass_devices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+    enabled = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    device = db.relationship('Device', backref='bgp_looking_glass')
+
+    def __repr__(self):
+        return f'<BgpLookingGlassDevice {self.device_id}>'

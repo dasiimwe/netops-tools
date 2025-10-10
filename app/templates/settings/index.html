@@ -169,6 +169,9 @@
     <button class="settings-tab" onclick="showSettingsTab('command-rules')">
         <i class="bi bi-terminal"></i> Command Rules
     </button>
+    <button class="settings-tab" onclick="showSettingsTab('bgp-looking-glass')">
+        <i class="bi bi-router"></i> BGP Looking Glass
+    </button>
 </div>
 
 <!-- Connection Settings Tab -->
@@ -314,6 +317,19 @@
                         </div>
                     </div>
 
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tool_bgp_looking_glass" name="tool_bgp_looking_glass"
+                                   {% if settings.tool_bgp_looking_glass is not defined or settings.tool_bgp_looking_glass %}checked{% endif %}>
+                            <label class="form-check-label" for="tool_bgp_looking_glass">
+                                <strong>BGP Looking Glass</strong>
+                            </label>
+                            <div class="form-text">BGP and routing table lookup tool</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-6 mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="tool_traceroute" name="tool_traceroute"
@@ -671,6 +687,46 @@
             </div>
         </div>
     </div>
+
+</div>
+
+<!-- BGP Looking Glass Tab -->
+<div id="bgp-looking-glass-tab" class="tab-content-wrapper">
+    <div class="card settings-card">
+        <div class="card-header">
+            BGP Looking Glass Devices
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3" style="font-size: 0.875rem;">Select which devices should be available in the BGP Looking Glass tool</p>
+
+            <div class="mb-3">
+                <label for="deviceSearch" class="form-label"><strong>Search Devices:</strong></label>
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="deviceSearch" placeholder="Search by hostname, IP address, or device type..." oninput="filterBgpDevices()">
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearDeviceSearch()">
+                        <i class="bi bi-x-circle"></i> Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label"><strong>Available Devices:</strong></label>
+                <div id="bgpDeviceList" style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; background-color: #f8f9fa;">
+                    <p class="text-muted">Loading devices...</p>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span id="selectedDeviceCount" class="badge bg-primary">0 devices selected</span>
+                </div>
+                <button type="button" class="btn btn-success" onclick="saveBgpDevices()">
+                    <i class="bi bi-save"></i> Save BGP Looking Glass Devices
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -685,10 +741,15 @@ function showSettingsTab(tabName) {
     tabs.forEach(tab => tab.classList.remove('active'));
 
     // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
+    const selectedTab = document.getElementById(tabName + '-tab');
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
 
-    // Set active tab button
-    event.target.classList.add('active');
+    // Set active tab button (only if event is available)
+    if (typeof event !== 'undefined' && event.target) {
+        event.target.classList.add('active');
+    }
 
     // Save last active tab
     localStorage.setItem('activeSettingsTab', tabName);
@@ -1088,6 +1149,166 @@ function testTacacs() {
     .catch(error => {
         alert('Error testing TACACS+ connection');
     });
+}
+
+// ==================== BGP Looking Glass Devices Functions ====================
+
+// Global variable to store all devices for filtering
+let allBgpDevices = [];
+
+// Load BGP devices on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadBgpDeviceSettings();
+});
+
+async function loadBgpDeviceSettings() {
+    const deviceListDiv = document.getElementById('bgpDeviceList');
+
+    try {
+        // Load all devices
+        const devicesResponse = await fetch('/devices/api/list');
+
+        if (!devicesResponse.ok) {
+            throw new Error(`HTTP error! status: ${devicesResponse.status}`);
+        }
+
+        const allDevices = await devicesResponse.json();
+
+        // Check if response has error property
+        if (allDevices.error) {
+            throw new Error(allDevices.error);
+        }
+
+        // Check if allDevices is actually an array
+        if (!Array.isArray(allDevices)) {
+            console.error('Invalid response format:', allDevices);
+            throw new Error('Invalid response format - expected array');
+        }
+
+        // Load BGP-enabled devices
+        const bgpResponse = await fetch('/settings/api/bgp-looking-glass/settings');
+        let bgpDeviceIds = [];
+
+        if (bgpResponse.ok) {
+            bgpDeviceIds = await bgpResponse.json();
+            if (!Array.isArray(bgpDeviceIds)) {
+                bgpDeviceIds = [];
+            }
+        }
+
+        // Store devices globally for filtering
+        allBgpDevices = allDevices.map(device => ({
+            ...device,
+            isEnabled: bgpDeviceIds.includes(device.id)
+        }));
+
+        // Render the device list
+        renderBgpDeviceList(allBgpDevices);
+        updateSelectedDeviceCount();
+
+    } catch (error) {
+        console.error('Error loading BGP device settings:', error);
+        deviceListDiv.innerHTML = `<p class="text-danger">Error loading devices: ${error.message}</p>`;
+    }
+}
+
+function renderBgpDeviceList(devices) {
+    const deviceListDiv = document.getElementById('bgpDeviceList');
+    deviceListDiv.innerHTML = '';
+
+    if (devices.length === 0) {
+        deviceListDiv.innerHTML = '<p class="text-muted">No devices found matching your search.</p>';
+        return;
+    }
+
+    // Create checkboxes for each device
+    devices.forEach(device => {
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'form-check mb-2 bgp-device-item';
+        checkboxDiv.setAttribute('data-hostname', device.hostname.toLowerCase());
+        checkboxDiv.setAttribute('data-ip', device.ip_address.toLowerCase());
+        checkboxDiv.setAttribute('data-vendor', device.vendor.toLowerCase());
+
+        checkboxDiv.innerHTML = `
+            <input class="form-check-input bgp-device-checkbox" type="checkbox"
+                   value="${device.id}" id="bgp_device_${device.id}"
+                   ${device.isEnabled ? 'checked' : ''}
+                   onchange="updateSelectedDeviceCount()">
+            <label class="form-check-label" for="bgp_device_${device.id}" style="cursor: pointer;">
+                <strong>${escapeHtml(device.hostname)}</strong> - ${escapeHtml(device.ip_address)}
+                <span class="badge bg-secondary">${escapeHtml(device.vendor)}</span>
+            </label>
+        `;
+        deviceListDiv.appendChild(checkboxDiv);
+    });
+}
+
+function filterBgpDevices() {
+    const searchTerm = document.getElementById('deviceSearch').value.toLowerCase().trim();
+
+    if (!searchTerm) {
+        // Show all devices if search is empty
+        const visibleDevices = document.querySelectorAll('.bgp-device-item');
+        visibleDevices.forEach(item => {
+            item.style.display = 'block';
+        });
+        return;
+    }
+
+    // Filter devices based on search term
+    const visibleDevices = document.querySelectorAll('.bgp-device-item');
+    visibleDevices.forEach(item => {
+        const hostname = item.getAttribute('data-hostname');
+        const ip = item.getAttribute('data-ip');
+        const vendor = item.getAttribute('data-vendor');
+
+        const matches = hostname.includes(searchTerm) ||
+                       ip.includes(searchTerm) ||
+                       vendor.includes(searchTerm);
+
+        item.style.display = matches ? 'block' : 'none';
+    });
+}
+
+function clearDeviceSearch() {
+    document.getElementById('deviceSearch').value = '';
+    filterBgpDevices();
+}
+
+function updateSelectedDeviceCount() {
+    const checkedBoxes = document.querySelectorAll('.bgp-device-checkbox:checked');
+    const count = checkedBoxes.length;
+    const countElement = document.getElementById('selectedDeviceCount');
+
+    if (countElement) {
+        countElement.textContent = `${count} device${count !== 1 ? 's' : ''} selected`;
+    }
+}
+
+async function saveBgpDevices() {
+    const checkboxes = document.querySelectorAll('.bgp-device-checkbox:checked');
+    const deviceIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    try {
+        const response = await fetch('/settings/api/bgp-looking-glass/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                device_ids: deviceIds
+            })
+        });
+
+        if (response.ok) {
+            alert('BGP Looking Glass devices saved successfully!');
+        } else {
+            alert('Error saving BGP devices');
+        }
+    } catch (error) {
+        console.error('Error saving BGP devices:', error);
+        alert('Error saving BGP devices');
+    }
 }
 </script>
 {% endblock %}

@@ -27,6 +27,7 @@ def index():
         'ip_translator': Settings.get_value('tool_ip_translator', True),
         'command_runner': Settings.get_value('tool_command_runner', True),
         'dns_lookup': Settings.get_value('tool_dns_lookup', True),
+        'bgp_looking_glass': Settings.get_value('tool_bgp_looking_glass', True),
         'traceroute': Settings.get_value('tool_traceroute', True),
         'url_insights': Settings.get_value('tool_url_insights', True),
         'tcp_handshake': Settings.get_value('tool_tcp_handshake', True),
@@ -98,8 +99,8 @@ def resolve_hostname():
                 # Reverse DNS failed, check database
                 from app.models import Device
                 device = Device.query.filter_by(ip_address=ip_address).first()
-                if device and device.name:
-                    resolved_hostname = device.name
+                if device and device.hostname:
+                    resolved_hostname = device.hostname
 
             # Return with hostname if found, otherwise just IP
             if resolved_hostname:
@@ -2047,3 +2048,135 @@ def tcp_handshake():
             'X-Accel-Buffering': 'no'
         }
     )
+
+# ==================== BGP Looking Glass API Endpoints ====================
+
+@main_bp.route('/api/bgp-looking-glass/devices', methods=['GET'])
+def get_bgp_looking_glass_devices():
+    """Get list of devices configured for BGP Looking Glass"""
+    try:
+        from app.models import BgpLookingGlassDevice
+
+        bgp_devices = BgpLookingGlassDevice.query.filter_by(enabled=True).all()
+
+        devices_list = []
+        for bgp_device in bgp_devices:
+            device = bgp_device.device
+            devices_list.append({
+                'id': device.id,
+                'hostname': device.hostname,
+                'ip_address': device.ip_address,
+                'vendor': device.vendor
+            })
+
+        return jsonify(devices_list)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@main_bp.route('/api/bgp-looking-glass/lookup', methods=['POST'])
+def bgp_looking_glass_lookup():
+    """Perform BGP Looking Glass lookup on selected devices with streaming output"""
+    from flask import current_app, stream_with_context
+
+    # Get request data from form or JSON
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form.to_dict()
+        # Convert string values to proper types
+        data['show_ip_route'] = data.get('show_ip_route') == 'true'
+        data['show_ip_bgp'] = data.get('show_ip_bgp') == 'true'
+        data['device_ids'] = json.loads(data.get('device_ids', '[]'))
+
+    username = data.get('username')
+    password = data.get('password')
+    prefix = data.get('prefix', '').strip()
+    show_ip_route = data.get('show_ip_route', False)
+    show_ip_bgp = data.get('show_ip_bgp', False)
+    device_ids = data.get('device_ids', [])
+
+    # Validation
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    if not prefix:
+        return jsonify({'error': 'Prefix required'}), 400
+    if not device_ids:
+        return jsonify({'error': 'At least one device must be selected'}), 400
+
+    @stream_with_context
+    def generate():
+        """Generator function to stream results as they become available"""
+        from app.device_connectors.cisco_ios import CiscoIOSConnector
+        from app.device_connectors.cisco_nxos import CiscoNXOSConnector
+        from app.device_connectors.cisco_iosxr import CiscoIOSXRConnector
+        from app.device_connectors.paloalto import PaloAltoConnector
+        from app.device_connectors.fortigate import FortiGateConnector
+
+        # Get devices from database
+        devices = Device.query.filter(Device.id.in_(device_ids)).all()
+
+        for device in devices:
+            # Send device header
+            yield f"data: {json.dumps({'type': 'device_start', 'hostname': device.hostname})}\n\n"
+
+            try:
+                # Determine connector based on device type
+                connector_class = None
+                if device.vendor == 'cisco_ios':
+                    connector_class = CiscoIOSConnector
+                elif device.vendor == 'cisco_nxos':
+                    connector_class = CiscoNXOSConnector
+                elif device.vendor == 'cisco_iosxr':
+                    connector_class = CiscoIOSXRConnector
+                elif device.vendor in ['paloalto', 'paloalto_panos']:
+                    connector_class = PaloAltoConnector
+                elif device.vendor in ['fortigate', 'fortinet']:
+                    connector_class = FortiGateConnector
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'hostname': device.hostname, 'message': f'Unsupported device type: {device.vendor}'})}\n\n"
+                    continue
+
+                # Connect to device
+                yield f"data: {json.dumps({'type': 'status', 'hostname': device.hostname, 'message': 'Connecting...'})}\n\n"
+                connector = connector_class(device.ip_address, username, password)
+                connector.connect()
+                yield f"data: {json.dumps({'type': 'status', 'hostname': device.hostname, 'message': 'Connected'})}\n\n"
+
+                # Build commands based on device type
+                commands_to_run = []
+
+                if show_ip_route:
+                    if device.vendor in ['cisco_ios', 'cisco_nxos', 'cisco_iosxr']:
+                        commands_to_run.append(f'show ip route {prefix}')
+                    elif device.vendor in ['paloalto', 'paloalto_panos']:
+                        commands_to_run.append(f'show routing route destination {prefix}')
+                    elif device.vendor in ['fortigate', 'fortinet']:
+                        commands_to_run.append(f'get router info routing-table details {prefix}')
+
+                if show_ip_bgp:
+                    if device.vendor in ['cisco_ios', 'cisco_nxos']:
+                        commands_to_run.append(f'show ip bgp {prefix}')
+                    elif device.vendor == 'cisco_iosxr':
+                        commands_to_run.append(f'show bgp {prefix}')
+                    elif device.vendor in ['paloalto', 'paloalto_panos']:
+                        commands_to_run.append(f'show routing protocol bgp loc-rib prefix {prefix}')
+                    elif device.vendor in ['fortigate', 'fortinet']:
+                        commands_to_run.append(f'get router info bgp network {prefix}')
+
+                # Execute commands and stream output
+                for command in commands_to_run:
+                    yield f"data: {json.dumps({'type': 'command', 'hostname': device.hostname, 'command': command})}\n\n"
+                    output = connector.execute_command(command)
+                    yield f"data: {json.dumps({'type': 'output', 'hostname': device.hostname, 'command': command, 'output': output})}\n\n"
+
+                connector.disconnect()
+                yield f"data: {json.dumps({'type': 'device_complete', 'hostname': device.hostname})}\n\n"
+
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'hostname': device.hostname, 'message': str(e)})}\n\n"
+
+        # Send completion event
+        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')

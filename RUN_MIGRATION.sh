@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Script to run database migration for saved device lists and commands feature
+# Script to run database migration for saved device lists, commands, and BGP Looking Glass features
 # This script activates the virtual environment and runs the migration
 
-echo "========================================="
-echo "Saved Device Lists & Commands Migration"
-echo "========================================="
+echo "=============================================="
+echo "Database Migration - Latest Features"
+echo "=============================================="
 echo ""
 
 # Check if venv exists
@@ -40,23 +40,26 @@ flask db upgrade
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "========================================="
+    echo "=============================================="
     echo "✅ Migration completed successfully!"
-    echo "========================================="
+    echo "=============================================="
     echo ""
-    echo "New tables created:"
+    echo "New tables created/updated:"
     echo "  - saved_device_lists"
     echo "  - saved_commands"
+    echo "  - bgp_looking_glass_devices"
     echo ""
     echo "You can now access the features at:"
     echo "  - /saved-items/device-lists"
     echo "  - /saved-items/commands"
+    echo "  - BGP Looking Glass tab on main page"
+    echo "  - Configure BGP devices in Settings"
     echo ""
 else
     echo ""
-    echo "========================================="
+    echo "=============================================="
     echo "❌ Migration failed!"
-    echo "========================================="
+    echo "=============================================="
     echo ""
     echo "Please check the error messages above"
     deactivate

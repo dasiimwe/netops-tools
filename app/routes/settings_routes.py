@@ -41,6 +41,7 @@ def index():
         'tool_ip_translator': Settings.get_value('tool_ip_translator', True),
         'tool_command_runner': Settings.get_value('tool_command_runner', True),
         'tool_dns_lookup': Settings.get_value('tool_dns_lookup', True),
+        'tool_bgp_looking_glass': Settings.get_value('tool_bgp_looking_glass', True),
         'tool_traceroute': Settings.get_value('tool_traceroute', True),
         'tool_url_insights': Settings.get_value('tool_url_insights', True),
         'tool_tcp_handshake': Settings.get_value('tool_tcp_handshake', True),
@@ -182,6 +183,11 @@ def update():
                           request.form.get('tool_dns_lookup') == 'on',
                           'bool',
                           'Show DNS Lookup tool on home page')
+
+        Settings.set_value('tool_bgp_looking_glass',
+                          request.form.get('tool_bgp_looking_glass') == 'on',
+                          'bool',
+                          'Show BGP Looking Glass tool on home page')
 
         Settings.set_value('tool_traceroute',
                           request.form.get('tool_traceroute') == 'on',
@@ -375,3 +381,58 @@ def save_command_rules():
 
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error saving rules: {str(e)}'}), 500
+# ==================== BGP Looking Glass Settings Endpoints ====================
+
+@settings_bp.route('/api/bgp-looking-glass/settings', methods=['GET'])
+@login_required
+def get_bgp_settings():
+    """Get list of device IDs configured for BGP Looking Glass"""
+    try:
+        from app.models import BgpLookingGlassDevice
+
+        bgp_devices = BgpLookingGlassDevice.query.filter_by(enabled=True).all()
+        device_ids = [bgp_device.device_id for bgp_device in bgp_devices]
+
+        return jsonify(device_ids)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@settings_bp.route('/api/bgp-looking-glass/settings', methods=['POST'])
+@login_required
+def save_bgp_settings():
+    """Save BGP Looking Glass device configuration"""
+    try:
+        from app.models import BgpLookingGlassDevice
+
+        data = request.get_json()
+        device_ids = data.get('device_ids', [])
+
+        # Delete all existing BGP device configs
+        BgpLookingGlassDevice.query.delete()
+
+        # Add new configs
+        for device_id in device_ids:
+            bgp_device = BgpLookingGlassDevice(
+                device_id=device_id,
+                enabled=True
+            )
+            db.session.add(bgp_device)
+
+        db.session.commit()
+
+        # Create audit log
+        audit_log = AuditLog(
+            user_id=current_user.id,
+            action='update_bgp_looking_glass_devices',
+            details=f'Updated BGP Looking Glass devices: {len(device_ids)} devices',
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

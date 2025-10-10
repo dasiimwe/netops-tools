@@ -165,6 +165,8 @@ cython_debug/
 network_devices.db
 app.log
 migrations/versions/*.py
+!migrations/versions/2025_10_09_bgp_looking_glass_devices.py
+command-run-tool-output/
 
 # IDE and editor files
 .vscode/
