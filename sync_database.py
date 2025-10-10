@@ -32,9 +32,18 @@ from sqlalchemy.exc import OperationalError
 def get_all_model_tables():
     """Get all table names defined in models."""
     tables = {}
-    for name, obj in db.Model._decl_class_registry.items():
-        if name != '_sa_module_registry' and hasattr(obj, '__tablename__'):
-            tables[obj.__tablename__] = obj
+    # Get all subclasses of db.Model (compatible with SQLAlchemy 2.x)
+    try:
+        # SQLAlchemy 2.x
+        for mapper in db.Model.registry.mappers:
+            model_class = mapper.class_
+            if hasattr(model_class, '__tablename__'):
+                tables[model_class.__tablename__] = model_class
+    except AttributeError:
+        # SQLAlchemy 1.x fallback
+        for name, obj in db.Model._decl_class_registry.items():
+            if name != '_sa_module_registry' and hasattr(obj, '__tablename__'):
+                tables[obj.__tablename__] = obj
     return tables
 
 

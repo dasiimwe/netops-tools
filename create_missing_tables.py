@@ -36,9 +36,17 @@ def main():
 
         # Get all model tables
         model_tables = {}
-        for name, obj in db.Model._decl_class_registry.items():
-            if name != '_sa_module_registry' and hasattr(obj, '__tablename__'):
-                model_tables[obj.__tablename__] = obj
+        try:
+            # SQLAlchemy 2.x
+            for mapper in db.Model.registry.mappers:
+                model_class = mapper.class_
+                if hasattr(model_class, '__tablename__'):
+                    model_tables[model_class.__tablename__] = model_class
+        except AttributeError:
+            # SQLAlchemy 1.x fallback
+            for name, obj in db.Model._decl_class_registry.items():
+                if name != '_sa_module_registry' and hasattr(obj, '__tablename__'):
+                    model_tables[obj.__tablename__] = obj
 
         # Find missing tables
         model_table_names = set(model_tables.keys())
