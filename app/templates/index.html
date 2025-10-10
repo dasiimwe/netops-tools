@@ -343,7 +343,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <p style="margin: 0;">Network Device Command Runner</p>
             <button onclick="showSavedResults()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 14px;">
-                📁 View Saved Results
+                View Saved Results
             </button>
         </div>
 
@@ -539,16 +539,27 @@
                     <input type="checkbox" id="optShowIpBgp" checked>
                     <label for="optShowIpBgp">show ip bgp</label>
                 </div>
+                <div style="margin: 5px;">
+                    <input type="checkbox" id="optTranslateIps" checked>
+                    <label for="optTranslateIps">Translate IP addresses</label>
+                </div>
             </div>
 
             <!-- Device Selection -->
             <div style="margin-bottom: 20px;">
-                <label><strong>Looking Glass Devices:</strong></label><br>
-                <select id="bgpDevices" multiple size="10" style="margin: 5px; padding: 5px; width: 400px; font-family: monospace;">
-                    <option value="">Loading devices...</option>
-                </select>
-                <div style="font-size: 12px; color: #666; margin-left: 5px;">
-                    Hold Ctrl (Cmd on Mac) to select multiple devices
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label><strong>Looking Glass Devices:</strong></label>
+                    <div>
+                        <button onclick="selectAllBgpDevices()" style="padding: 5px 10px; margin-right: 5px; background: #6c757d; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 12px;">
+                            Select All
+                        </button>
+                        <button onclick="deselectAllBgpDevices()" style="padding: 5px 10px; background: #6c757d; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 12px;">
+                            Deselect All
+                        </button>
+                    </div>
+                </div>
+                <div id="bgpDevicesList" style="border: 1px solid #ccc; padding: 15px; background: #f8f9fa; max-height: 400px; overflow-y: auto; border-radius: 4px;">
+                    <p style="color: #666; font-style: italic;">Loading devices...</p>
                 </div>
             </div>
 
@@ -564,8 +575,12 @@
 
             <!-- Results Section -->
             <div style="margin-top: 20px;">
-                <label><strong>Results:</strong></label>
-                <br>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label><strong>Results:</strong></label>
+                    <button id="bgpCopyButton" onclick="copyBgpResults()" style="padding: 5px 15px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px; display: none;">
+                        <i class="bi bi-clipboard"></i> Copy to Clipboard
+                    </button>
+                </div>
                 <div id="bgpResults" style="border: 1px solid #ccc; padding: 10px; min-height: 200px; font-family: 'Consolas', monospace; line-height: 1.2; background: white; margin-top: 10px; white-space: pre-wrap;">
                     <em>BGP lookup results will appear here...</em>
                 </div>
@@ -4635,9 +4650,9 @@
         });
 
         async function loadBgpDevices() {
-            // Check if BGP devices select element exists (only on BGP Looking Glass tool)
-            const select = document.getElementById('bgpDevices');
-            if (!select) {
+            // Check if BGP devices list element exists (only on BGP Looking Glass tool)
+            const devicesList = document.getElementById('bgpDevicesList');
+            if (!devicesList) {
                 return; // Element doesn't exist, skip loading
             }
 
@@ -4645,26 +4660,87 @@
                 const response = await fetch('/api/bgp-looking-glass/devices');
                 if (response.ok) {
                     const devices = await response.json();
-                    select.innerHTML = '';
 
                     if (devices.length === 0) {
-                        select.innerHTML = '<option value="">No devices configured. Please configure in Settings.</option>';
-                    } else {
-                        devices.forEach(device => {
-                            const option = document.createElement('option');
-                            option.value = device.id;
-                            option.textContent = `${device.hostname} (${device.ip_address})`;
-                            select.appendChild(option);
-                        });
+                        devicesList.innerHTML = '<p style="color: #666; font-style: italic;">No devices configured. Please configure in Settings.</p>';
+                        return;
                     }
+
+                    // Sort devices alphabetically by hostname
+                    devices.sort((a, b) => a.hostname.localeCompare(b.hostname));
+
+                    // Group devices by common prefix (first part before number or dash)
+                    const groups = groupDevicesByPrefix(devices);
+
+                    // Build HTML for checkbox list with 4 columns
+                    let html = '';
+                    for (const [groupName, groupDevices] of Object.entries(groups)) {
+                        if (groupName && Object.keys(groups).length > 1) {
+                            html += `<div style="margin-bottom: 15px;">
+                                <h4 style="font-size: 14px; font-weight: bold; color: #495057; margin-bottom: 8px; border-bottom: 2px solid #dee2e6; padding-bottom: 4px;">
+                                    ${groupName}
+                                </h4>`;
+                        }
+
+                        html += '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">';
+
+                        groupDevices.forEach(device => {
+                            html += `
+                                <label style="display: flex; align-items: center; padding: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <input type="checkbox" class="bgp-device-checkbox" value="${device.id}" style="margin-right: 6px;">
+                                    <span title="${device.hostname} (${device.ip_address})">${device.hostname}</span>
+                                </label>
+                            `;
+                        });
+
+                        html += '</div>';
+
+                        if (groupName && Object.keys(groups).length > 1) {
+                            html += '</div>';
+                        }
+                    }
+
+                    devicesList.innerHTML = html;
                 } else {
                     console.error('Error loading BGP devices');
-                    select.innerHTML = '<option value="">Error loading devices</option>';
+                    devicesList.innerHTML = '<p style="color: #dc3545;">Error loading devices</p>';
                 }
             } catch (error) {
                 console.error('Error loading BGP devices:', error);
-                select.innerHTML = '<option value="">Error loading devices</option>';
+                devicesList.innerHTML = '<p style="color: #dc3545;">Error loading devices</p>';
             }
+        }
+
+        function groupDevicesByPrefix(devices) {
+            const groups = {};
+
+            devices.forEach(device => {
+                // Extract prefix from hostname (letters before numbers/dashes)
+                const match = device.hostname.match(/^([a-zA-Z]+)/);
+                const prefix = match ? match[1] : 'Other';
+
+                if (!groups[prefix]) {
+                    groups[prefix] = [];
+                }
+                groups[prefix].push(device);
+            });
+
+            // If all devices have different prefixes or only one group, don't group
+            if (Object.keys(groups).length === devices.length || Object.keys(groups).length === 1) {
+                return { '': devices };
+            }
+
+            return groups;
+        }
+
+        function selectAllBgpDevices() {
+            const checkboxes = document.querySelectorAll('.bgp-device-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function deselectAllBgpDevices() {
+            const checkboxes = document.querySelectorAll('.bgp-device-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
         }
 
         async function runBgpLookup() {
@@ -4674,8 +4750,9 @@
             const showIpRoute = document.getElementById('optShowIpRoute').checked;
             const showIpBgp = document.getElementById('optShowIpBgp').checked;
 
-            const deviceSelect = document.getElementById('bgpDevices');
-            const selectedDevices = Array.from(deviceSelect.selectedOptions).map(opt => opt.value);
+            // Get selected devices from checkboxes
+            const checkedBoxes = document.querySelectorAll('.bgp-device-checkbox:checked');
+            const selectedDevices = Array.from(checkedBoxes).map(cb => cb.value);
 
             // Validation
             if (!username || !password) {
@@ -4700,10 +4777,12 @@
 
             const progressDiv = document.getElementById('bgpProgress');
             const resultsDiv = document.getElementById('bgpResults');
+            const copyButton = document.getElementById('bgpCopyButton');
 
             progressDiv.style.display = 'block';
             progressDiv.innerHTML = '<div>Starting BGP lookup...</div>';
             resultsDiv.textContent = '';
+            copyButton.style.display = 'none'; // Hide copy button when starting new lookup
 
             // Build URL with query parameters for POST with EventSource compatibility
             const formData = new URLSearchParams({
@@ -4777,14 +4856,15 @@
             }
         }
 
-        function handleBgpStreamEvent(event, progressDiv, resultsDiv) {
+        async function handleBgpStreamEvent(event, progressDiv, resultsDiv) {
             const { type, hostname, command, output, message } = event;
+            const translateIps = document.getElementById('optTranslateIps')?.checked || false;
 
             switch (type) {
                 case 'device_start':
-                    resultsDiv.textContent += '=' + '='.repeat(79) + '\n';
-                    resultsDiv.textContent += `Device: ${hostname}\n`;
-                    resultsDiv.textContent += '=' + '='.repeat(79) + '\n\n';
+                    resultsDiv.innerHTML += '=' + '='.repeat(79) + '\n';
+                    resultsDiv.innerHTML += `Device: ${hostname}\n`;
+                    resultsDiv.innerHTML += '=' + '='.repeat(79) + '\n\n';
                     progressDiv.innerHTML = `<div>Processing device: ${hostname}...</div>`;
                     break;
 
@@ -4793,30 +4873,72 @@
                     break;
 
                 case 'command':
-                    resultsDiv.textContent += `----- ${command} -----\n`;
+                    resultsDiv.innerHTML += `----- ${command} -----\n`;
                     progressDiv.innerHTML = `<div>${hostname}: Executing command...</div>`;
                     break;
 
                 case 'output':
-                    resultsDiv.textContent += output || '(no output)';
-                    resultsDiv.textContent += '\n\n';
+                    let displayOutput = output || '(no output)';
+
+                    // Translate IPs if option is enabled
+                    if (translateIps && output) {
+                        try {
+                            const response = await fetch(`/api/translate-ip?text=${encodeURIComponent(output)}`);
+                            const data = await response.json();
+                            displayOutput = data.translated_text || output;
+                        } catch (error) {
+                            console.error('Error translating IPs:', error);
+                            // Fall back to original output on error
+                        }
+                    }
+
+                    resultsDiv.innerHTML += displayOutput;
+                    resultsDiv.innerHTML += '\n\n';
                     // Auto-scroll to bottom
                     resultsDiv.scrollTop = resultsDiv.scrollHeight;
                     break;
 
                 case 'error':
-                    resultsDiv.textContent += `ERROR: ${message}\n\n`;
+                    resultsDiv.innerHTML += `ERROR: ${message}\n\n`;
                     resultsDiv.scrollTop = resultsDiv.scrollHeight;
                     break;
 
                 case 'device_complete':
-                    resultsDiv.textContent += '\n';
+                    resultsDiv.innerHTML += '\n';
                     break;
 
                 case 'complete':
                     progressDiv.innerHTML = '<div style="color: green;">✓ All devices processed!</div>';
+                    // Show copy button when all processing is complete
+                    const copyBtn = document.getElementById('bgpCopyButton');
+                    if (copyBtn) copyBtn.style.display = 'inline-block';
                     break;
             }
+        }
+
+        function copyBgpResults() {
+            const resultsDiv = document.getElementById('bgpResults');
+            const copyButton = document.getElementById('bgpCopyButton');
+
+            // Get the text content, stripping HTML tags
+            const textToCopy = resultsDiv.innerText || resultsDiv.textContent;
+
+            // Use the Clipboard API
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // Show success feedback
+                const originalText = copyButton.innerHTML;
+                copyButton.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+                copyButton.style.background = '#218838';
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    copyButton.innerHTML = originalText;
+                    copyButton.style.background = '#28a745';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy to clipboard. Please try selecting and copying manually.');
+            });
         }
 
         function displayBgpResults(data) {
