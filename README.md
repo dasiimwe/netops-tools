@@ -183,14 +183,48 @@ Access at http://localhost:5000
 - **Auto-scrolling** results during streaming output
 - **Bootstrap icons** integration throughout the interface
 
-## Production
+## Production Deployment
+
+### Quick Start
 
 ```bash
-# Production deployment
-gunicorn -w 4 -b 0.0.0.0:5000 run:app
+# Using startup script (recommended)
+./start_production.sh          # Linux/Mac
+start_production.bat           # Windows
+
+# Or directly with Gunicorn
+gunicorn -w 4 -b 127.0.0.1:5000 run:app
+
+# With configuration file
+gunicorn -c gunicorn_config.py run:app
 ```
 
-Set strong `SECRET_KEY` and `ENCRYPTION_KEY` in production environment.
+### Production Requirements
+
+1. **Set strong keys in `.env`:**
+   ```bash
+   SECRET_KEY=your-super-secret-key-min-32-characters
+   ENCRYPTION_KEY=your-fernet-encryption-key
+   ```
+
+2. **Configure workers and timeouts:**
+   ```bash
+   GUNICORN_WORKERS=4
+   GUNICORN_BIND=127.0.0.1:5000
+   GUNICORN_TIMEOUT=300
+   ```
+
+3. **Use a reverse proxy (Nginx/Apache)**
+4. **Enable SSL/TLS certificates**
+5. **Set up systemd service for auto-start**
+
+**📚 Complete Guide:** See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive production deployment instructions including:
+- Systemd service setup
+- Nginx reverse proxy configuration
+- SSL/TLS setup with Let's Encrypt
+- Performance tuning
+- Monitoring and logging
+- Troubleshooting guide
 
 ## Architecture
 
