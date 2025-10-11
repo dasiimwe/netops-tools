@@ -187,76 +187,83 @@ def admin():
 @main_bp.route('/api/translate-ip')
 def translate_ip():
     """API endpoint to translate IP addresses to hostname and interface info"""
-    text = request.args.get('text', '')
+    try:
+        text = request.args.get('text', '')
 
-    if not text.strip():
-        return jsonify({'translated_text': text})
+        if not text.strip():
+            return jsonify({'translated_text': text})
 
-    # Find all IP addresses in the text using regex
-    ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-    ip_addresses = re.findall(ip_pattern, text)
+        # Find all IP addresses in the text using regex
+        ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+        ip_addresses = re.findall(ip_pattern, text)
 
-    if not ip_addresses:
-        return jsonify({'translated_text': text})
+        if not ip_addresses:
+            return jsonify({'translated_text': text})
 
-    translated_text = text
+        translated_text = text
 
-    # Process unique IPs to avoid nested replacements
-    unique_ips = list(set(ip_addresses))
-    ip_replacements = {}
+        # Process unique IPs to avoid nested replacements
+        unique_ips = list(set(ip_addresses))
+        ip_replacements = {}
 
-    for ip in unique_ips:
-        # Look for interface with this IP
-        interface = Interface.query.join(Device).filter(
-            or_(
-                Interface.ipv4_address.like(f'{ip}/%'),
-                Interface.ipv4_address == ip
-            )
-        ).first()
+        for ip in unique_ips:
+            # Look for interface with this IP (handle CIDR notation in database)
+            # Database stores IPs as "x.x.x.x/yy" so we need to match the IP part before the slash
+            interface = db.session.query(Interface).join(Device).filter(
+                or_(
+                    Interface.ipv4_address.like(f'{ip}/%'),  # Matches "10.1.1.1/24"
+                    Interface.ipv4_address == ip              # Matches "10.1.1.1" (if stored without CIDR)
+                )
+            ).first()
 
-        if interface:
-            device = interface.device
+            if interface:
+                device = interface.device
 
-            # Shorten interface name: first 2 letters + digits at end (e.g., GigabitEthernet1/0/1 -> gi1/0/1)
-            interface_short = interface.name.lower()
-            # Extract first 2 letters and any digits/slashes at the end
-            match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
-            if match:
-                interface_short = match.group(1).lower() + match.group(2)
-            else:
-                # Fallback: just take first 2 chars if no match
-                interface_short = interface.name[:2].lower()
+                # Shorten interface name: first 2 letters + digits at end (e.g., GigabitEthernet1/0/1 -> gi1/0/1)
+                interface_short = interface.name.lower()
+                # Extract first 2 letters and any digits/slashes at the end
+                match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+                if match:
+                    interface_short = match.group(1).lower() + match.group(2)
+                else:
+                    # Fallback: just take first 2 chars if no match
+                    interface_short = interface.name[:2].lower()
 
-            # Create display format with blue hostname: ip(hostname-interface)
-            short_name = f"<span style=\"color: blue;\">{device.hostname}</span>-{interface_short}"
+                # Create display format with blue hostname: ip(hostname-interface)
+                short_name = f"<span style=\"color: blue;\">{device.hostname}</span>-{interface_short}"
 
-            display_text = f"{ip}({short_name})"
+                display_text = f"{ip}({short_name})"
 
-            # Create detailed tooltip info
-            tooltip_data = {
-                'ip': ip,
-                'hostname': device.hostname,
-                'interface_name': interface.name,
-                'interface_description': interface.description or 'No description',
-                'management_ip': device.ip_address,
-                'device_vendor': device.vendor.replace('_', ' ').title(),
-                'interface_status': interface.status or 'Unknown'
-            }
+                # Create detailed tooltip info
+                tooltip_data = {
+                    'ip': ip,
+                    'hostname': device.hostname,
+                    'interface_name': interface.name,
+                    'interface_description': interface.description or 'No description',
+                    'management_ip': device.ip_address,
+                    'device_vendor': device.vendor.replace('_', ' ').title(),
+                    'interface_status': interface.status or 'Unknown'
+                }
 
-            # Store replacement for this IP
-            import json
-            tooltip_json = json.dumps(tooltip_data).replace('"', '&quot;')
-            enhanced_ip = f'<span class="ip-enhanced" data-ip="{ip}" data-tooltip="{tooltip_json}" data-mgmt-ip="{device.ip_address}" style="cursor: pointer;">{display_text}</span>'
-            ip_replacements[ip] = enhanced_ip
+                # Store replacement for this IP
+                import json
+                tooltip_json = json.dumps(tooltip_data).replace('"', '&quot;')
+                enhanced_ip = f'<span class="ip-enhanced" data-ip="{ip}" data-tooltip="{tooltip_json}" data-mgmt-ip="{device.ip_address}" style="cursor: pointer;">{display_text}</span>'
+                ip_replacements[ip] = enhanced_ip
 
-    # Apply replacements in order of longest IP first to avoid partial matches
-    for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
-        translated_text = translated_text.replace(ip, ip_replacements[ip])
+        # Apply replacements in order of longest IP first to avoid partial matches
+        for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
+            translated_text = translated_text.replace(ip, ip_replacements[ip])
 
-    # Convert newlines to HTML line breaks to preserve formatting
-    translated_text = translated_text.replace('\n', '<br>')
+        # Convert newlines to HTML line breaks to preserve formatting
+        translated_text = translated_text.replace('\n', '<br>')
 
-    return jsonify({'translated_text': translated_text})
+        return jsonify({'translated_text': translated_text})
+    except Exception as e:
+        print(f"Error in translate_ip: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'translated_text': text, 'error': str(e)}), 500
 
 def validate_command_safety(command):
     """
@@ -463,50 +470,65 @@ def execute_commands_on_device(device_ip, commands, username, password, preferre
 
 def translate_output_ips(text):
     """Apply IP translation like the IP translator tool"""
-    if not text.strip():
-        return text
+    try:
+        if not text.strip():
+            return text
 
-    # Find all IP addresses in the text using regex
-    ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-    ip_addresses = re.findall(ip_pattern, text)
+        # Find all IP addresses in the text using regex
+        ip_pattern = r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+        ip_addresses = re.findall(ip_pattern, text)
 
-    if not ip_addresses:
-        return text
+        if not ip_addresses:
+            return text
 
-    translated_text = text
-    unique_ips = list(set(ip_addresses))
-    ip_replacements = {}
+        print(f"DEBUG translate_output_ips: Found {len(ip_addresses)} IP addresses: {ip_addresses[:5]}")
 
-    for ip in unique_ips:
-        # Look for interface with this IP
-        interface = Interface.query.join(Device).filter(
-            or_(
-                Interface.ipv4_address.like(f'{ip}/%'),
-                Interface.ipv4_address == ip
-            )
-        ).first()
+        translated_text = text
+        unique_ips = list(set(ip_addresses))
+        ip_replacements = {}
 
-        if interface:
-            device = interface.device
+        for ip in unique_ips:
+            # Look for interface with this IP (handle CIDR notation in database)
+            # Database stores IPs as "x.x.x.x/yy" so we need to match the IP part before the slash
+            print(f"DEBUG translate_output_ips: Searching for IP: {ip}")
+            interface = db.session.query(Interface).join(Device).filter(
+                or_(
+                    Interface.ipv4_address.like(f'{ip}/%'),  # Matches "10.1.1.1/24"
+                    Interface.ipv4_address == ip              # Matches "10.1.1.1" (if stored without CIDR)
+                )
+            ).first()
 
-            # Shorten interface name
-            interface_short = interface.name.lower()
-            match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
-            if match:
-                interface_short = match.group(1).lower() + match.group(2)
+            if interface:
+                print(f"DEBUG translate_output_ips: Found interface! DB value: {interface.ipv4_address}")
+                device = interface.device
+
+                # Shorten interface name
+                interface_short = interface.name.lower()
+                match = re.match(r'^([a-zA-Z]{2})[a-zA-Z]*(.*)$', interface.name)
+                if match:
+                    interface_short = match.group(1).lower() + match.group(2)
+                else:
+                    interface_short = interface.name[:2].lower()
+
+                # Create simple text replacement (no HTML for command output)
+                short_name = f"{device.hostname}-{interface_short}"
+                display_text = f"{ip}({short_name})"
+                ip_replacements[ip] = display_text
+                print(f"DEBUG translate_output_ips: Translated {ip} -> {display_text}")
             else:
-                interface_short = interface.name[:2].lower()
+                print(f"DEBUG translate_output_ips: No interface found for {ip}")
 
-            # Create simple text replacement (no HTML for command output)
-            short_name = f"{device.hostname}-{interface_short}"
-            display_text = f"{ip}({short_name})"
-            ip_replacements[ip] = display_text
+        # Apply replacements
+        for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
+            translated_text = translated_text.replace(ip, ip_replacements[ip])
 
-    # Apply replacements
-    for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
-        translated_text = translated_text.replace(ip, ip_replacements[ip])
-
-    return translated_text
+        print(f"DEBUG translate_output_ips: Applied {len(ip_replacements)} translations")
+        return translated_text
+    except Exception as e:
+        print(f"Error in translate_output_ips: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return text  # Return original text on error
 
 @main_bp.route('/api/run-commands', methods=['POST'])
 def run_commands():
@@ -1562,7 +1584,7 @@ def translate_traceroute_ip(ip_address, app=None):
         if app:
             with app.app_context():
                 # Look for interface with this IP
-                interface = Interface.query.join(Device).filter(
+                interface = db.session.query(Interface).join(Device).filter(
                     or_(
                         Interface.ipv4_address.like(f'{ip_address}/%'),
                         Interface.ipv4_address == ip_address
@@ -1582,7 +1604,7 @@ def translate_traceroute_ip(ip_address, app=None):
                     return f"{device.hostname}-{interface_short}"
         else:
             # Look for interface with this IP (when already in app context)
-            interface = Interface.query.join(Device).filter(
+            interface = db.session.query(Interface).join(Device).filter(
                 or_(
                     Interface.ipv4_address.like(f'{ip_address}/%'),
                     Interface.ipv4_address == ip_address

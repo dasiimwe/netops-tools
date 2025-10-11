@@ -328,7 +328,8 @@
 
         <label>
             <strong>Translated Output:</strong>
-            <button id="copyButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;" onclick="copyTranslatedOutput()">Copy</button>
+            <button id="translateButton" style="margin-left: 10px; padding: 4px 8px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px;" onclick="translateText()">Translate</button>
+            <button id="copyButton" style="margin-left: 5px; padding: 4px 8px; cursor: pointer;" onclick="copyTranslatedOutput()">Copy</button>
         </label>
         <br>
         <div id="outputArea" style="border: 0px solid #ccc; padding: 10px; min-height: 100px; font-family: 'Consolas', monospace; line-height: 1.2;">
@@ -1521,7 +1522,17 @@
 
                     const outputDiv = document.createElement('div');
                     outputDiv.className = 'command-output';
-                    outputDiv.textContent = commandData.output || 'No output';
+
+                    // Use translated output if available, otherwise fall back to raw output
+                    let outputText = 'No output';
+                    if (commandData.translated_output && commandData.translated_output.trim()) {
+                        outputText = commandData.translated_output;
+                    } else if (commandData.output && commandData.output.trim()) {
+                        outputText = commandData.output;
+                    }
+
+                    // Use innerHTML to preserve formatting
+                    outputDiv.innerHTML = outputText.replace(/\n/g, '<br>');
                     deviceDiv.appendChild(outputDiv);
                 }
             } else {
