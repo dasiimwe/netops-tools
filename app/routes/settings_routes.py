@@ -257,11 +257,16 @@ def update():
 def test_tacacs():
     if not current_user.is_admin:
         return jsonify({'success': False, 'message': 'Admin access required'}), 403
-    
-    if test_tacacs_connection():
-        return jsonify({'success': True, 'message': 'TACACS+ server connection successful'})
-    else:
-        return jsonify({'success': False, 'message': 'Failed to connect to TACACS+ server'})
+
+    # Get credentials from request
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    # Call test function with credentials
+    result = test_tacacs_connection(username, password)
+
+    return jsonify(result)
 
 @settings_bp.route('/audit_logs')
 @login_required
