@@ -559,6 +559,14 @@
                         </button>
                     </div>
                 </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="text" id="bgpDeviceSearch" placeholder="Search devices by hostname or IP..."
+                           oninput="filterBgpDevices()"
+                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 5px; color: #666; font-size: 12px;">
+                    <span id="bgpDeviceCount">0 devices</span>
+                </div>
                 <div id="bgpDevicesList" style="border: 1px solid #ccc; padding: 15px; background: #f8f9fa; max-height: 400px; overflow-y: auto; border-radius: 4px;">
                     <p style="color: #666; font-style: italic;">Loading devices...</p>
                 </div>
@@ -1240,6 +1248,35 @@
             };
         }
 
+        // Helper function to chunk array into batches
+        function chunkArray(array, chunkSize) {
+            const chunks = [];
+            for (let i = 0; i < array.length; i += chunkSize) {
+                chunks.push(array.slice(i, i + chunkSize));
+            }
+            return chunks;
+        }
+
+        // Helper function to resolve a single device hostname
+        async function resolveSingleDevice(device) {
+            try {
+                const response = await fetch('/api/resolve-hostname', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        hostname: device
+                    })
+                });
+
+                const data = await response.json();
+                return { device, success: data.success, data };
+            } catch (error) {
+                return { device, success: false, error: error.message };
+            }
+        }
+
         // Command runner functions
         async function addDevice() {
             const deviceInput = document.getElementById('deviceInput');
@@ -1265,64 +1302,79 @@
                 return;
             }
 
+            // Filter out devices that already exist
+            const devicesToResolve = deviceList.filter(device => {
+                const alreadyExists = devices.some(d => {
+                    const parts = d.split(' | ');
+                    return d === device || parts[0] === device || (parts[1] && parts[1] === device);
+                });
+                return !alreadyExists;
+            });
+
+            const skippedCount = deviceList.length - devicesToResolve.length;
+
+            if (devicesToResolve.length === 0) {
+                alert(`⊘ All ${deviceList.length} device(s) already exist in the list`);
+                deviceInput.value = '';
+                return;
+            }
+
             // Show loading indicator
             const originalPlaceholder = deviceInput.placeholder;
-            deviceInput.placeholder = `Resolving ${deviceList.length} device(s)...`;
             deviceInput.disabled = true;
 
             let addedCount = 0;
-            let skippedCount = 0;
             let failedCount = 0;
             const errors = [];
 
+            const BATCH_SIZE = 20;
+            const batches = chunkArray(devicesToResolve, BATCH_SIZE);
+            const totalDevices = devicesToResolve.length;
+            let processedCount = 0;
+
             try {
-                // Process each device
-                for (const device of deviceList) {
-                    // Check if already exists (check both raw and display format)
-                    const alreadyExists = devices.some(d => {
-                        const parts = d.split(' | ');
-                        return d === device || parts[0] === device || (parts[1] && parts[1] === device);
+                // Process devices in batches
+                for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                    const batch = batches[batchIndex];
+
+                    // Update progress indicator
+                    deviceInput.placeholder = `Resolving ${processedCount}/${totalDevices} devices...`;
+
+                    // Create parallel promises for this batch
+                    const promises = batch.map(device => resolveSingleDevice(device));
+
+                    // Wait for all devices in batch to complete
+                    const results = await Promise.allSettled(promises);
+
+                    // Process results
+                    results.forEach((result, index) => {
+                        if (result.status === 'fulfilled') {
+                            const { device, success, data, error } = result.value;
+
+                            if (success && data.success) {
+                                // Add the device with resolved format
+                                devices.push(data.display);
+                                addedCount++;
+                            } else {
+                                // Hostname resolution failed
+                                failedCount++;
+                                errors.push(`${device}: ${data.error || error || 'Unknown error'}`);
+                            }
+                        } else {
+                            // Promise rejected
+                            const device = batch[index];
+                            failedCount++;
+                            errors.push(`${device}: ${result.reason || 'Promise rejected'}`);
+                        }
+                        processedCount++;
                     });
 
-                    if (alreadyExists) {
-                        skippedCount++;
-                        continue;
-                    }
-
-                    try {
-                        // Resolve hostname to IP
-                        const response = await fetch('/api/resolve-hostname', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                hostname: device
-                            })
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            // Add the device with resolved format
-                            devices.push(data.display);
-                            addedCount++;
-                        } else {
-                            // Hostname resolution failed
-                            failedCount++;
-                            errors.push(`${device}: ${data.error}`);
-                        }
-                    } catch (error) {
-                        console.error(`Error resolving ${device}:`, error);
-                        failedCount++;
-                        errors.push(`${device}: Network error`);
-                    }
-                }
-
-                // Update the device list display
-                if (addedCount > 0) {
+                    // Update the device list display after each batch
                     updateDeviceList();
                 }
+
+                // Final progress update
+                deviceInput.placeholder = `Completed: ${processedCount}/${totalDevices} devices processed`;
 
                 // Show summary message
                 let message = '';
@@ -4730,6 +4782,9 @@
             loadBgpDevices();
         });
 
+        // Store all BGP devices globally for filtering
+        let allBgpDevices = [];
+
         async function loadBgpDevices() {
             // Check if BGP devices list element exists (only on BGP Looking Glass tool)
             const devicesList = document.getElementById('bgpDevicesList');
@@ -4740,86 +4795,97 @@
             try {
                 const response = await fetch('/api/bgp-looking-glass/devices');
                 if (response.ok) {
-                    const devices = await response.json();
+                    allBgpDevices = await response.json();
 
-                    if (devices.length === 0) {
+                    if (allBgpDevices.length === 0) {
                         devicesList.innerHTML = '<p style="color: #666; font-style: italic;">No devices configured. Please configure in Settings.</p>';
+                        updateBgpDeviceCount(0);
                         return;
                     }
 
                     // Sort devices alphabetically by hostname
-                    devices.sort((a, b) => a.hostname.localeCompare(b.hostname));
+                    allBgpDevices.sort((a, b) => a.hostname.localeCompare(b.hostname));
 
-                    // Group devices by common prefix (first part before number or dash)
-                    const groups = groupDevicesByPrefix(devices);
-
-                    // Build HTML for checkbox list with 4 columns
-                    let html = '';
-                    for (const [groupName, groupDevices] of Object.entries(groups)) {
-                        if (groupName && Object.keys(groups).length > 1) {
-                            html += `<div style="margin-bottom: 15px;">
-                                <h4 style="font-size: 14px; font-weight: bold; color: #495057; margin-bottom: 8px; border-bottom: 2px solid #dee2e6; padding-bottom: 4px;">
-                                    ${groupName}
-                                </h4>`;
-                        }
-
-                        html += '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">';
-
-                        groupDevices.forEach(device => {
-                            html += `
-                                <label style="display: flex; align-items: center; padding: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <input type="checkbox" class="bgp-device-checkbox" value="${device.id}" style="margin-right: 6px;">
-                                    <span title="${device.hostname} (${device.ip_address})">${device.hostname}</span>
-                                </label>
-                            `;
-                        });
-
-                        html += '</div>';
-
-                        if (groupName && Object.keys(groups).length > 1) {
-                            html += '</div>';
-                        }
-                    }
-
-                    devicesList.innerHTML = html;
+                    // Render all devices
+                    renderBgpDevices(allBgpDevices);
                 } else {
                     console.error('Error loading BGP devices');
                     devicesList.innerHTML = '<p style="color: #dc3545;">Error loading devices</p>';
+                    updateBgpDeviceCount(0);
                 }
             } catch (error) {
                 console.error('Error loading BGP devices:', error);
                 devicesList.innerHTML = '<p style="color: #dc3545;">Error loading devices</p>';
+                updateBgpDeviceCount(0);
             }
         }
 
-        function groupDevicesByPrefix(devices) {
-            const groups = {};
+        function renderBgpDevices(devices) {
+            const devicesList = document.getElementById('bgpDevicesList');
 
-            devices.forEach(device => {
-                // Extract prefix from hostname (letters before numbers/dashes)
-                const match = device.hostname.match(/^([a-zA-Z]+)/);
-                const prefix = match ? match[1] : 'Other';
-
-                if (!groups[prefix]) {
-                    groups[prefix] = [];
-                }
-                groups[prefix].push(device);
-            });
-
-            // If all devices have different prefixes or only one group, don't group
-            if (Object.keys(groups).length === devices.length || Object.keys(groups).length === 1) {
-                return { '': devices };
+            if (devices.length === 0) {
+                devicesList.innerHTML = '<p style="color: #666; font-style: italic;">No devices match your search.</p>';
+                updateBgpDeviceCount(0);
+                return;
             }
 
-            return groups;
+            // Build HTML for checkbox list in a simple vertical list
+            let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
+
+            devices.forEach(device => {
+                html += `
+                    <label class="bgp-device-item" data-hostname="${device.hostname.toLowerCase()}" data-ip="${device.ip_address.toLowerCase()}"
+                           style="display: flex; align-items: center; padding: 6px 8px; cursor: pointer; font-size: 14px; border-radius: 4px; transition: background 0.2s;"
+                           onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="bgp-device-checkbox" value="${device.id}" style="margin-right: 10px; cursor: pointer;">
+                        <span style="flex: 1;"><strong>${device.hostname}</strong></span>
+                        <span style="color: #6c757d; font-size: 12px; margin-left: 10px;">${device.ip_address}</span>
+                        <span style="color: #6c757d; font-size: 11px; margin-left: 10px; text-transform: uppercase;">${device.vendor.replace('_', ' ')}</span>
+                    </label>
+                `;
+            });
+
+            html += '</div>';
+            devicesList.innerHTML = html;
+            updateBgpDeviceCount(devices.length);
+        }
+
+        function updateBgpDeviceCount(count) {
+            const countElement = document.getElementById('bgpDeviceCount');
+            if (countElement) {
+                countElement.textContent = `${count} device${count !== 1 ? 's' : ''}`;
+            }
+        }
+
+        function filterBgpDevices() {
+            const searchInput = document.getElementById('bgpDeviceSearch');
+            if (!searchInput) return;
+
+            const searchTerm = searchInput.value.toLowerCase().trim();
+
+            if (!searchTerm) {
+                // No search term, show all devices
+                renderBgpDevices(allBgpDevices);
+                return;
+            }
+
+            // Filter devices by hostname or IP address
+            const filtered = allBgpDevices.filter(device => {
+                return device.hostname.toLowerCase().includes(searchTerm) ||
+                       device.ip_address.toLowerCase().includes(searchTerm);
+            });
+
+            renderBgpDevices(filtered);
         }
 
         function selectAllBgpDevices() {
+            // Only select visible (filtered) checkboxes
             const checkboxes = document.querySelectorAll('.bgp-device-checkbox');
             checkboxes.forEach(cb => cb.checked = true);
         }
 
         function deselectAllBgpDevices() {
+            // Only deselect visible (filtered) checkboxes
             const checkboxes = document.querySelectorAll('.bgp-device-checkbox');
             checkboxes.forEach(cb => cb.checked = false);
         }
