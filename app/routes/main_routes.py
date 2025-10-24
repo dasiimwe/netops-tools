@@ -330,8 +330,16 @@ def validate_command_safety(command):
         standalone_commands = ['uptime', 'version']
 
     # Step 1: Check for dangerous patterns first (blocklist approach)
+    # Common safe output filter keywords used after pipes in network device commands
+    safe_pipe_filters = ['match', 'include', 'exclude', 'begin', 'grep', 'count', 'section']
+
     for pattern in dangerous_patterns:
-        if pattern in command:
+        # Use word boundary matching to avoid false positives (e.g., "information" containing "format")
+        if re.search(r'\b' + re.escape(pattern) + r'\b', command):
+            # Check if this is a safe pipe filter (e.g., "show run | match interface")
+            if pattern in safe_pipe_filters and re.search(r'\|\s*' + re.escape(pattern) + r'\b', command):
+                # Pattern appears after a pipe, which is a safe output filter
+                continue
             return False, f"Dangerous command pattern detected: '{pattern}'. Only read-only troubleshooting commands are allowed."
 
     # Step 2: Check for safe prefixes (allowlist approach)

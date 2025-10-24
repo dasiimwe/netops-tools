@@ -359,8 +359,8 @@
                     </div>
                 </div>
                 <div class="add-item">
-                    <input type="text" id="deviceInput" placeholder="Enter device IP/hostname" style="width: 200px;">
-                    <button onclick="addDevice()">Add Device</button>
+                    <textarea id="deviceInput" placeholder="Enter device IP/hostname (one per line, comma, or space-separated)" style="width: 300px; height: 60px; resize: vertical;"></textarea>
+                    <button onclick="addDevice()">Add Device(s)</button>
                 </div>
                 <div id="deviceList" class="device-list">
                     <em>No devices added...</em>
@@ -1200,8 +1200,21 @@
             const cleanCommand = command.trim().toLowerCase();
 
             // Step 1: Check for dangerous patterns first (blocklist approach)
+            // Common safe output filter keywords used after pipes in network device commands
+            const safePipeFilters = ['match', 'include', 'exclude', 'begin', 'grep', 'count', 'section'];
+
             for (const pattern of commandRules.dangerousPatterns) {
-                if (cleanCommand.includes(pattern.toLowerCase())) {
+                const patternLower = pattern.toLowerCase();
+                // Use word boundary matching to avoid false positives (e.g., "information" containing "format")
+                const wordBoundaryRegex = new RegExp('\\b' + patternLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+
+                if (wordBoundaryRegex.test(cleanCommand)) {
+                    // Check if this is a safe pipe filter (e.g., "show run | match interface")
+                    const pipeFilterRegex = new RegExp('\\|\\s*' + patternLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+                    if (safePipeFilters.includes(patternLower) && pipeFilterRegex.test(cleanCommand)) {
+                        // Pattern appears after a pipe, which is a safe output filter
+                        continue;
+                    }
                     return {
                         isValid: false,
                         message: `Dangerous command pattern detected: '${pattern}'. Only read-only troubleshooting commands are allowed.`
@@ -1230,55 +1243,112 @@
         // Command runner functions
         async function addDevice() {
             const deviceInput = document.getElementById('deviceInput');
-            const device = deviceInput.value.trim();
+            const inputText = deviceInput.value.trim();
 
-            if (!device) {
+            if (!inputText) {
                 return;
             }
 
-            // Check if already exists (check both raw and display format)
-            const alreadyExists = devices.some(d => {
-                const parts = d.split(' | ');
-                return d === device || parts[0] === device || (parts[1] && parts[1] === device);
-            });
+            // Parse input: support newlines, commas, and spaces as delimiters
+            // First split by newlines, then split each line by commas and spaces
+            let deviceList = inputText
+                .split('\n')
+                .flatMap(line => line.split(','))
+                .flatMap(item => item.split(/\s+/))
+                .map(d => d.trim())
+                .filter(d => d.length > 0);
 
-            if (alreadyExists) {
-                alert('Device already exists in the list');
-                deviceInput.value = '';
+            // Remove duplicates from input
+            deviceList = [...new Set(deviceList)];
+
+            if (deviceList.length === 0) {
                 return;
             }
 
             // Show loading indicator
             const originalPlaceholder = deviceInput.placeholder;
-            deviceInput.placeholder = 'Resolving...';
+            deviceInput.placeholder = `Resolving ${deviceList.length} device(s)...`;
             deviceInput.disabled = true;
 
+            let addedCount = 0;
+            let skippedCount = 0;
+            let failedCount = 0;
+            const errors = [];
+
             try {
-                // Resolve hostname to IP
-                const response = await fetch('/api/resolve-hostname', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        hostname: device
-                    })
-                });
+                // Process each device
+                for (const device of deviceList) {
+                    // Check if already exists (check both raw and display format)
+                    const alreadyExists = devices.some(d => {
+                        const parts = d.split(' | ');
+                        return d === device || parts[0] === device || (parts[1] && parts[1] === device);
+                    });
 
-                const data = await response.json();
+                    if (alreadyExists) {
+                        skippedCount++;
+                        continue;
+                    }
 
-                if (data.success) {
-                    // Add the device with resolved format
-                    devices.push(data.display);
-                    updateDeviceList();
-                    deviceInput.value = '';
-                } else {
-                    // Hostname resolution failed
-                    alert(`Unable to add device: ${data.error}\n\nPlease check the hostname/IP and try again.`);
+                    try {
+                        // Resolve hostname to IP
+                        const response = await fetch('/api/resolve-hostname', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                hostname: device
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            // Add the device with resolved format
+                            devices.push(data.display);
+                            addedCount++;
+                        } else {
+                            // Hostname resolution failed
+                            failedCount++;
+                            errors.push(`${device}: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error(`Error resolving ${device}:`, error);
+                        failedCount++;
+                        errors.push(`${device}: Network error`);
+                    }
                 }
+
+                // Update the device list display
+                if (addedCount > 0) {
+                    updateDeviceList();
+                }
+
+                // Show summary message
+                let message = '';
+                if (addedCount > 0) {
+                    message += `✓ Added ${addedCount} device(s)\n`;
+                }
+                if (skippedCount > 0) {
+                    message += `⊘ Skipped ${skippedCount} duplicate(s)\n`;
+                }
+                if (failedCount > 0) {
+                    message += `✗ Failed to add ${failedCount} device(s)\n\n`;
+                    message += 'Errors:\n' + errors.slice(0, 5).join('\n');
+                    if (errors.length > 5) {
+                        message += `\n... and ${errors.length - 5} more`;
+                    }
+                }
+
+                if (message) {
+                    alert(message);
+                }
+
+                // Clear input on success
+                deviceInput.value = '';
             } catch (error) {
-                console.error('Error resolving hostname:', error);
-                alert('Error resolving hostname. Please try again.');
+                console.error('Error adding devices:', error);
+                alert('Error adding devices. Please try again.');
             } finally {
                 // Restore input state
                 deviceInput.placeholder = originalPlaceholder;
