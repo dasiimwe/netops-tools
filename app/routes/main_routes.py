@@ -1598,7 +1598,10 @@ def parse_hop_line(line, system):
     return hop_data if hop_data['probes'] else None
 
 def translate_traceroute_ip(ip_address, app=None):
-    """Translate IP to hostname and interface info from database"""
+    """Translate IP to hostname and interface info from database
+
+    Returns plain text only (no HTML) for display in traceroute results
+    """
     try:
         # If app context is provided, use it (for threaded execution)
         if app:
@@ -1621,7 +1624,11 @@ def translate_traceroute_ip(ip_address, app=None):
                     else:
                         interface_short = interface.name[:2].lower()
 
-                    return f"{device.hostname}-{interface_short}"
+                    # Return plain text only - strip any HTML tags as safety measure
+                    result = f"{device.hostname}-{interface_short}"
+                    # Remove any potential HTML tags or special characters
+                    result = re.sub(r'<[^>]+>', '', result)
+                    return result
         else:
             # Look for interface with this IP (when already in app context)
             interface = db.session.query(Interface).join(Device).filter(
@@ -1641,7 +1648,11 @@ def translate_traceroute_ip(ip_address, app=None):
                 else:
                     interface_short = interface.name[:2].lower()
 
-                return f"{device.hostname}-{interface_short}"
+                # Return plain text only - strip any HTML tags as safety measure
+                result = f"{device.hostname}-{interface_short}"
+                # Remove any potential HTML tags or special characters
+                result = re.sub(r'<[^>]+>', '', result)
+                return result
     except Exception:
         pass
 
