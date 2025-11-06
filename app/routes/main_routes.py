@@ -184,11 +184,16 @@ def admin():
                          recent_activity=recent_activity,
                          recent_devices=recent_devices)
 
-@main_bp.route('/api/translate-ip')
+@main_bp.route('/api/translate-ip', methods=['GET', 'POST'])
 def translate_ip():
     """API endpoint to translate IP addresses to hostname and interface info"""
     try:
-        text = request.args.get('text', '')
+        # Support both GET and POST methods
+        if request.method == 'POST':
+            data = request.get_json()
+            text = data.get('text', '') if data else ''
+        else:
+            text = request.args.get('text', '')
 
         if not text.strip():
             return jsonify({'translated_text': text})
@@ -198,7 +203,9 @@ def translate_ip():
         ip_addresses = re.findall(ip_pattern, text)
 
         if not ip_addresses:
-            return jsonify({'translated_text': text})
+            # No IPs found, preserve formatting
+            translated_text = text.replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;').replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+            return jsonify({'translated_text': translated_text})
 
         translated_text = text
 
@@ -255,7 +262,12 @@ def translate_ip():
         for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
             translated_text = translated_text.replace(ip, ip_replacements[ip])
 
-        # Convert newlines to HTML line breaks to preserve formatting
+        # Preserve formatting: convert whitespace and newlines to HTML equivalents
+        # Replace consecutive spaces with non-breaking spaces to preserve indentation
+        translated_text = translated_text.replace('  ', '&nbsp;&nbsp;')
+        # Replace tabs with 4 non-breaking spaces
+        translated_text = translated_text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+        # Convert newlines to HTML line breaks
         translated_text = translated_text.replace('\n', '<br>')
 
         return jsonify({'translated_text': translated_text})

@@ -3892,9 +3892,9 @@
         }
 
         async function translateText() {
-            const text = inputText.value.trim();
+            const text = inputText.value;
 
-            if (!text) {
+            if (!text.trim()) {
                 outputArea.innerHTML = '<em>Your translated text will appear here...</em>';
                 return;
             }
@@ -3902,7 +3902,14 @@
             loadingIndicator.style.display = 'block';
 
             try {
-                const response = await fetch(`/api/translate-ip?text=${encodeURIComponent(text)}`);
+                const response = await fetch('/api/translate-ip', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
                 const data = await response.json();
 
                 outputArea.innerHTML = data.translated_text || text;
