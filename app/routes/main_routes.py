@@ -258,9 +258,13 @@ def translate_ip():
                 enhanced_ip = f'<span class="ip-enhanced" data-ip="{ip}" data-tooltip="{tooltip_json}" data-mgmt-ip="{device.ip_address}" style="cursor: pointer;">{display_text}</span>'
                 ip_replacements[ip] = enhanced_ip
 
-        # Apply replacements in order of longest IP first to avoid partial matches
+        # Apply replacements using word boundaries to avoid partial matches
+        # Sort by length (longest first) as an extra precaution
         for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
-            translated_text = translated_text.replace(ip, ip_replacements[ip])
+            # Use regex with word boundaries to ensure we only match the complete IP
+            # This prevents "1.1.1.1" from matching within "1.1.1.11"
+            ip_pattern_exact = r'\b' + re.escape(ip) + r'\b'
+            translated_text = re.sub(ip_pattern_exact, ip_replacements[ip], translated_text)
 
         # Preserve formatting: convert whitespace and newlines to HTML equivalents
         # Replace consecutive spaces with non-breaking spaces to preserve indentation
@@ -538,9 +542,13 @@ def translate_output_ips(text):
             else:
                 print(f"DEBUG translate_output_ips: No interface found for {ip}")
 
-        # Apply replacements
+        # Apply replacements using word boundaries to avoid partial matches
+        # Sort by length (longest first) as an extra precaution
         for ip in sorted(ip_replacements.keys(), key=len, reverse=True):
-            translated_text = translated_text.replace(ip, ip_replacements[ip])
+            # Use regex with word boundaries to ensure we only match the complete IP
+            # This prevents "1.1.1.1" from matching within "1.1.1.11"
+            ip_pattern_exact = r'\b' + re.escape(ip) + r'\b'
+            translated_text = re.sub(ip_pattern_exact, ip_replacements[ip], translated_text)
 
         print(f"DEBUG translate_output_ips: Applied {len(ip_replacements)} translations")
         return translated_text
