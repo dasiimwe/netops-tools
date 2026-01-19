@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 import logging
 from typing import Dict, List, Optional, Tuple
-from netmiko import ConnectHandler
+from netmiko import ConnectHandler, SSHDetect
 from netmiko.exceptions import NetmikoTimeoutException, NetmikoAuthenticationException
 import time
 import uuid
 from datetime import datetime
+
+# Default fallback device types to try when primary connection fails
+DEFAULT_FALLBACK_DEVICE_TYPES = ['terminal_server']
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,8 @@ class BaseConnector(ABC):
     def __init__(self, host: str, username: str, password: str, port: int = 22,
                  timeout: int = 30, retry_enabled: bool = True,
                  retry_count: int = 3, retry_delay: int = 5, device_id: int = None,
-                 user_id: int = None, enable_session_logging: bool = True):
+                 user_id: int = None, enable_session_logging: bool = True,
+                 enable_autodetect: bool = True, fallback_device_types: List[str] = None):
         self.host = host
         self.username = username
         self.password = password
@@ -26,6 +30,11 @@ class BaseConnector(ABC):
         self.retry_delay = retry_delay
         self.connection = None
         self.device_type = self.get_netmiko_device_type()
+
+        # Autodetect and fallback settings
+        self.enable_autodetect = enable_autodetect
+        self.fallback_device_types = fallback_device_types or DEFAULT_FALLBACK_DEVICE_TYPES
+        self.actual_device_type = None  # Tracks which device_type actually connected
 
         # Session logging
         self.device_id = device_id
@@ -67,56 +76,166 @@ class BaseConnector(ABC):
             logger.error(f"Failed to log session event: {e}")
             # Don't let logging failures interrupt the main flow
     
-    def connect(self) -> bool:
-        """Establish SSH connection to device"""
-        start_time = datetime.now()
-        self._log_session_event('connection_start')
-
+    def _try_connect_with_device_type(self, device_type: str, timeout: int = None) -> bool:
+        """
+        Attempt connection with a specific device type.
+        Returns True if successful, False otherwise.
+        """
         device = {
-            'device_type': self.device_type,
+            'device_type': device_type,
             'host': self.host,
             'username': self.username,
             'password': self.password,
             'port': self.port,
-            'timeout': self.timeout,
-            'conn_timeout': self.timeout
+            'timeout': timeout or self.timeout,
+            'conn_timeout': timeout or self.timeout
         }
+
+        try:
+            logger.info(f"Trying connection to {self.host} with device_type '{device_type}'")
+            self.connection = ConnectHandler(**device)
+            self.actual_device_type = device_type
+            logger.info(f"Successfully connected to {self.host} using device_type '{device_type}'")
+            return True
+        except NetmikoAuthenticationException:
+            raise  # Re-raise auth failures immediately
+        except Exception as e:
+            logger.debug(f"Connection with device_type '{device_type}' failed: {str(e)}")
+            return False
+
+    def _autodetect_device_type(self) -> Optional[str]:
+        """
+        Use netmiko's SSHDetect to automatically detect the device type.
+        Returns detected device type or None if detection fails.
+        """
+        logger.info(f"Attempting SSH autodetect for {self.host}")
+
+        device = {
+            'device_type': 'autodetect',
+            'host': self.host,
+            'username': self.username,
+            'password': self.password,
+            'port': self.port,
+            'timeout': 10,  # Shorter timeout for autodetect
+            'conn_timeout': 10
+        }
+
+        try:
+            guesser = SSHDetect(**device)
+            best_match = guesser.autodetect()
+            guesser.connection.disconnect()
+
+            if best_match:
+                logger.info(f"Autodetect identified device_type '{best_match}' for {self.host}")
+                return best_match
+            else:
+                logger.warning(f"Autodetect could not determine device_type for {self.host}")
+                return None
+
+        except NetmikoAuthenticationException:
+            raise  # Re-raise auth failures
+        except Exception as e:
+            logger.warning(f"Autodetect failed for {self.host}: {str(e)}")
+            return None
+
+    def connect(self) -> bool:
+        """
+        Establish SSH connection to device with autodetect and fallback support.
+
+        Connection strategy:
+        1. Try with configured device_type (with retries)
+        2. If failed (not auth failure), use SSHDetect to auto-discover device type
+        3. If autodetect fails, try fallback device types (e.g., terminal_server)
+        """
+        start_time = datetime.now()
+        self._log_session_event('connection_start')
 
         attempts = self.retry_count if self.retry_enabled else 1
         last_exception = None
+        auth_failed = False
 
+        # Phase 1: Try with configured device_type (with retries)
         for attempt in range(1, attempts + 1):
             try:
-                logger.info(f"Connecting to {self.host} (attempt {attempt}/{attempts})")
-                self.connection = ConnectHandler(**device)
-                logger.info(f"Successfully connected to {self.host}")
-
-                # Log successful connection
-                duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-                self._log_session_event('connection_success', duration_ms=duration_ms)
-                return True
+                logger.info(f"Connecting to {self.host} (attempt {attempt}/{attempts}) with device_type '{self.device_type}'")
+                if self._try_connect_with_device_type(self.device_type):
+                    duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                    self._log_session_event('connection_success', duration_ms=duration_ms)
+                    return True
 
             except NetmikoAuthenticationException as e:
                 logger.error(f"Authentication failed for {self.host}: {str(e)}")
                 last_exception = e
+                auth_failed = True
                 self._log_session_event('connection_failed', error_message=f"Authentication failed: {str(e)}")
                 break  # Don't retry auth failures
 
-            except NetmikoTimeoutException as e:
-                logger.warning(f"Connection timeout for {self.host} (attempt {attempt}/{attempts}): {str(e)}")
-                last_exception = e
-                if attempt == attempts:  # Log only on final attempt
-                    self._log_session_event('connection_failed', error_message=f"Connection timeout: {str(e)}")
-
             except Exception as e:
-                logger.error(f"Connection error for {self.host} (attempt {attempt}/{attempts}): {str(e)}")
+                logger.warning(f"Connection error for {self.host} (attempt {attempt}/{attempts}): {str(e)}")
                 last_exception = e
-                if attempt == attempts:  # Log only on final attempt
-                    self._log_session_event('connection_failed', error_message=str(e))
 
             if attempt < attempts and self.retry_enabled:
                 logger.info(f"Retrying in {self.retry_delay} seconds...")
                 time.sleep(self.retry_delay)
+
+        # Don't try autodetect/fallback if auth failed
+        if auth_failed:
+            raise last_exception
+
+        # Phase 2: Try autodetect if enabled
+        if self.enable_autodetect:
+            try:
+                detected_type = self._autodetect_device_type()
+                if detected_type and detected_type != self.device_type:
+                    logger.info(f"Trying autodetected device_type '{detected_type}' for {self.host}")
+                    self._log_session_event('autodetect_triggered',
+                                           error_message=f"Configured type '{self.device_type}' failed, autodetected '{detected_type}'")
+                    if self._try_connect_with_device_type(detected_type):
+                        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                        self._log_session_event('connection_success',
+                                               duration_ms=duration_ms,
+                                               error_message=f"Connected using autodetected device_type '{detected_type}'")
+                        return True
+
+            except NetmikoAuthenticationException as e:
+                logger.error(f"Authentication failed during autodetect for {self.host}: {str(e)}")
+                last_exception = e
+                self._log_session_event('connection_failed', error_message=f"Authentication failed: {str(e)}")
+                raise last_exception
+
+            except Exception as e:
+                logger.warning(f"Autodetect attempt failed for {self.host}: {str(e)}")
+                last_exception = e
+
+        # Phase 3: Try fallback device types
+        for fallback_type in self.fallback_device_types:
+            if fallback_type == self.device_type:
+                continue  # Skip if same as original
+
+            try:
+                logger.info(f"Trying fallback device_type '{fallback_type}' for {self.host}")
+                self._log_session_event('fallback_triggered',
+                                       error_message=f"Trying fallback device_type '{fallback_type}'")
+                if self._try_connect_with_device_type(fallback_type):
+                    duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                    self._log_session_event('connection_success',
+                                           duration_ms=duration_ms,
+                                           error_message=f"Connected using fallback device_type '{fallback_type}'")
+                    return True
+
+            except NetmikoAuthenticationException as e:
+                logger.error(f"Authentication failed with fallback for {self.host}: {str(e)}")
+                last_exception = e
+                self._log_session_event('connection_failed', error_message=f"Authentication failed: {str(e)}")
+                raise last_exception
+
+            except Exception as e:
+                logger.warning(f"Fallback '{fallback_type}' failed for {self.host}: {str(e)}")
+                last_exception = e
+
+        # All attempts failed
+        self._log_session_event('connection_failed',
+                               error_message=f"All connection methods failed. Last error: {str(last_exception)}")
 
         if last_exception:
             raise last_exception

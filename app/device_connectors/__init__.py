@@ -6,6 +6,7 @@ from .arista import AristaConnector
 from .juniper import JuniperConnector
 from .paloalto import PaloAltoConnector
 from .fortigate import FortiGateConnector
+from .generic import GenericConnector
 from .base_connector import BaseConnector
 
 # Vendor mapping for easy lookup
@@ -18,6 +19,7 @@ VENDOR_MAPPING = {
     'juniper': JuniperConnector,
     'paloalto': PaloAltoConnector,
     'fortigate': FortiGateConnector,
+    'generic': GenericConnector,
 }
 
 def get_connector(vendor: str, host: str, username: str, password: str, **kwargs) -> BaseConnector:
@@ -38,6 +40,7 @@ __all__ = [
     'JuniperConnector',
     'PaloAltoConnector',
     'FortiGateConnector',
+    'GenericConnector',
     'get_connector',
     'VENDOR_MAPPING'
 ]
