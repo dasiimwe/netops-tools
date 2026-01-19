@@ -377,6 +377,10 @@ def get_device_connector(device_ip, username, password, preferred_connector=None
         username: Username for authentication
         password: Password for authentication
         preferred_connector: Optional connector type to try first (e.g., 'cisco_ios', 'paloalto_panos')
+
+    Returns:
+        tuple: (connector, errors) where connector is the connected device connector or None,
+               and errors is a list of error messages from failed connection attempts or None on success
     """
     from app.device_connectors.cisco_ios import CiscoIOSConnector
     from app.device_connectors.cisco_nxos import CiscoNXOSConnector
@@ -413,6 +417,8 @@ def get_device_connector(device_ip, username, password, preferred_connector=None
             connectors_to_try.remove(preferred_class)
         connectors_to_try.insert(0, preferred_class)
 
+    errors = []  # Collect errors from each connector attempt
+
     for connector_class in connectors_to_try:
         try:
             connector = connector_class(
@@ -424,11 +430,12 @@ def get_device_connector(device_ip, username, password, preferred_connector=None
                 enable_session_logging=False
             )
             if connector.connect():
-                return connector
-        except Exception:
+                return connector, None  # Success - no errors
+        except Exception as e:
+            errors.append(f"{connector_class.__name__}: {str(e)}")
             continue
 
-    return None
+    return None, errors
 
 def execute_commands_on_device_with_context(app, device_ip, commands, username, password, preferred_connector=None):
     """Execute commands on a single device within Flask app context"""
@@ -439,12 +446,13 @@ def execute_commands_on_device(device_ip, commands, username, password, preferre
     """Execute commands on a single device"""
     try:
         print(f"DEBUG: Attempting to connect to device: {device_ip}")
-        connector = get_device_connector(device_ip, username, password, preferred_connector)
+        connector, connection_errors = get_device_connector(device_ip, username, password, preferred_connector)
         if not connector:
-            print(f"DEBUG: Failed to get connector for device: {device_ip}")
+            error_detail = '; '.join(connection_errors) if connection_errors else 'No connectors available'
+            print(f"DEBUG: Failed to get connector for device: {device_ip} - {error_detail}")
             return {
                 'status': 'failed',
-                'error': 'Could not connect to device or unsupported device type'
+                'error': f'Connection failed: {error_detail}'
             }
 
         device_result = {
